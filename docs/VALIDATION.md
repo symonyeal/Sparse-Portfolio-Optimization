@@ -15,6 +15,13 @@ optimization rows.
 
 ## Gates
 
+Local reproduction on 20 October 2026: the existing suite returned 142 passed and
+one expected failure at the declared printed-precision frontier gate. Ruff and
+dependency checks passed. The owner confirmed that no licensed CRSP extract is
+available. Public numerical checks therefore remain the available evidence;
+G3 and the CRSP empirical studies remain blocked, with no investment-performance
+claim added and no synthetic replacement for the missing empirical data.
+
 | Gate | Required evidence |
 | --- | --- |
 | G1 | OR-Library unconstrained frontier at its printed coordinate precision; also report raw differences and KKT residuals |
