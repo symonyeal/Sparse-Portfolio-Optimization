@@ -109,7 +109,7 @@ def elig(Pt, M, m, Nc):
     return U[np.argsort(-v[U], kind="stable")][:Nc]
 
 
-def hold(P0, t, cols, w, H):
+def hold(P0, t, cols, w, H, backend="python"):
     """Wealth path over months t+1..t+H of weights w on columns cols, bought at the end of t."""
     cols, w = np.asarray(cols), np.asarray(w, float)
     horizon(P0, t, H)
@@ -117,6 +117,12 @@ def hold(P0, t, cols, w, H):
         raise ValueError("holding columns and weights disagree")
     if abs(w.sum() - 1) > 1e-9 or np.any(w < -1e-12):
         raise ValueError("weights must be nonnegative and sum to one")
+    if backend == "rust":
+        from pf import native
+        return native.hold(P0.R[t + 1:t + H + 1][:, cols], P0.rf[t + 1:t + H + 1],
+                           P0.ls[cols] - t - 1, w)
+    if backend != "python":
+        raise ValueError("holding backend must be python or rust")
     v = w.copy()
     cash = 0.0
     Wp = []
@@ -175,7 +181,7 @@ def b4(Pt, U, K, g):
     return c, np.full(K, 1.0 / K)
 
 
-def run(P0, sel, dates, M, m, Nc, H):
+def run(P0, sel, dates, M, m, Nc, H, backend="python"):
     """Select on P0.upto(t), hold on P0, and retain unavailable or failed dates."""
     out = []
     for t in dates:
@@ -202,7 +208,7 @@ def run(P0, sel, dates, M, m, Nc, H):
             cols = np.asarray(cols)
             original = Pt.j[cols]
             q.update(cols=original, pc=Pt.pc[cols], w=np.asarray(w),
-                     W=hold(P0, t, original, w, H))
+                     W=hold(P0, t, original, w, H, backend=backend))
             q["status"] = "ok" if "c" not in q else q["c"]["st"]
         except (ValueError, RuntimeError) as e:
             q.update(status="unavailable", reason=str(e))

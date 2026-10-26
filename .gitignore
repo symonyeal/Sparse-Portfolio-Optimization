@@ -12,3 +12,4 @@ crsp*.csv
 CRSP*.csv
 # Empirical holdings include licensed identifiers; retain their bundles locally.
 docs/results/oos/
+native/target/

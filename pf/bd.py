@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CODE = ("pf",)
 CONFIG = ("run_bench.py", "run_boot.py", "run_oos.py", "pyproject.toml", "requirements.txt",
-          "data/orlib/SHA256")
+          "data/orlib/SHA256", "native/Cargo.toml", "native/Cargo.lock", "native/src/lib.rs")
 
 # Legend
 # key : case key; pa : case parameters; r : result record; ip : {input file: sha256}

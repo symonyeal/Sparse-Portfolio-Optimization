@@ -100,3 +100,11 @@ Both require the licensed extract and follow the [pre-registration](docs/PLAN.md
 Synthetic fixtures test arithmetic, selection timing and numerical properties only.
 
 Code: [MIT](LICENSE). OR-Library data: [separate MIT notice](data/orlib/LICENSE).
+
+## Optional research tools
+
+[Integrations](docs/INTEGRATIONS.md) describes the selectable Rust holding backend,
+PyPortfolioOpt continuous-frontier checks, vectorbt checks on evaluated wealth, and an
+offline OpenBB export reader. `python run_compare.py` runs the external arithmetic checks
+after installing the optional research requirements. The registered empirical strategy set
+and the default Python calculation are preserved.

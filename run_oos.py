@@ -89,6 +89,7 @@ def main(argv=None):
     a.add_argument("--time", type=float, default=60.0)
     a.add_argument("--seed", type=int, default=0)
     a.add_argument("--missing", action="store_true")
+    a.add_argument("--backend", choices=("python", "rust"), default="python")
     x = a.parse_args(argv)
     if not x.crsp:
         raise SystemExit("no CRSP extract supplied (--crsp): P6 is blocked; see docs/PLAN.md")
@@ -103,17 +104,24 @@ def main(argv=None):
     P0, nf = bt.panel(rows, rfd, fill=x.fill)
     ip = {"crsp": rows["sha"], "rf": rfd["sha"], "rf_vintage": rfd["vintage"],
           "plan": dat.sha256(Path(__file__).parent / "docs/PLAN.md")}
+    if x.backend == "rust":
+        from pf import native
+        ip["native"] = native.identity()
     dates = range(x.M - 1, P0.R.shape[0] - x.H)
     for s in x.only or ST:
         key = f"oos-{s}-K{x.K}-M{x.M}-m{x.m}-Nc{x.Nc}-H{x.H}-{'fill' if x.fill else 'nofill'}"
         pa = {"s": s, "K": x.K, "M": x.M, "m": x.m, "Nc": x.Nc, "H": x.H, "fill": x.fill,
               "tl": x.time, "seed": x.seed}
+        if x.backend != "python":
+            pa["backend"] = x.backend
+            key += "-rust"
         if s == "f5":
             pa.update(g=GAM, k=KAP)
         if x.missing and bd.valid(OUT, key, pa, code["source"], ip):
             continue
         g = np.random.default_rng(x.seed)
-        o = bt.run(P0, rule(s, x.K, x.M, x.time, g, x.m), dates, x.M, x.m, x.Nc, x.H)
+        o = bt.run(P0, rule(s, x.K, x.M, x.time, g, x.m), dates, x.M, x.m, x.Nc, x.H,
+                   backend=x.backend)
         market, errors = [], []
         for q in o:
             try:
