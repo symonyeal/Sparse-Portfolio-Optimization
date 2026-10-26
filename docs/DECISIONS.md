@@ -4,6 +4,20 @@ The [working contract](../CLAUDE.md) defines implementation and evidence rules. 
 recomputation avoids errors shared by two solvers using the same row matrix. Synthetic
 fixtures name the property tested and carry no empirical interpretation.
 
+## Optional research tooling (26 October 2026)
+
+| Decision | Reason |
+| --- | --- |
+| Port the holding account loop to a dependency-free Rust library behind explicit `--backend rust`. | Profiling a deterministic synthetic panel put most holding time in the Python loop; the original route remains the numerical oracle. |
+| Retain NumPy's account sums after the Rust loop. | Changing reduction order can change delivered floating-point values. |
+| Require source-matched builds and record the Rust binary hash in empirical bundles. | Native code must participate in stale-result rejection. |
+| Use PyPortfolioOpt/CLARABEL as an optional continuous variance check. | It provides a separate implementation for an exact-mean continuous frontier; no cardinality certificate is claimed. |
+| Use vectorbt on evaluated wealth. | It checks cumulative returns and drawdown without replacing the CRSP delisting account rules. |
+| Read OpenBB exports offline with explicit adjustment provenance. | Provider price fields have different adjustment semantics and cannot establish a delisting-complete universe. |
+| Keep Eiten and Vibe-Trading outside the dependency set; use awesome-quant as a directory. | They add overlapping portfolio heuristics or agent/execution infrastructure rather than an independent sparse certificate. Any new empirical comparison requires a registered extension. |
+
+Interfaces, source links and reproduction commands are in [Integrations](INTEGRATIONS.md).
+
 ## Solvers (2 October 2026)
 
 | Decision | Reason |

@@ -1,5 +1,47 @@
 # Validation
 
+## Optional tooling checks, 26 October 2026
+
+The full `python -m pytest -q` run with the Rust library and optional Python packages
+enabled returned **182 passed, 1 xfailed**, with no skips, in 43.70 seconds. The expected
+failure is the existing strict G1 printed-frontier gate described below. Python was 3.14;
+NumPy was 2.4.6. `python -m ruff check .` and `python -m pip check` passed. The system
+Python environment's dependency check also passed after the optional packages were
+installed in a separate working directory with `pip --target`.
+
+`cargo test --locked --manifest-path native/Cargo.toml` returned one passing Rust test.
+`cargo fmt --manifest-path native/Cargo.toml -- --check` and
+`cargo clippy --locked --manifest-path native/Cargo.toml -- -D warnings` passed.
+The new GitHub Actions jobs have been configured; their hosted execution is not checked.
+
+The Rust holding tests compare output bytes against Python for seeded synthetic panels,
+including delistings, missing listed returns, total loss, zero weights, tolerated tiny
+negative weights and reordered columns. They also reject an intentionally altered path
+and a mismatched embedded source. A synthetic `run_oos.py` test checks identical terminal
+wealth and selections, separate Rust bundle keys, and the recorded native binary hash.
+The Python route also matches the baseline captured before the port on the saved panel.
+Parity on a licensed CRSP panel is not measured because the extract is unavailable.
+
+The final same-input timing used 100 holding calls per batch, five batches per backend,
+H = 120 months and K = 100 supplied holdings. Both routes matched the saved baseline exactly.
+The seed was 26; this was a synthetic arithmetic check on the same Windows laptop.
+
+| Holding backend | Median seconds per 100 calls | Observed range, seconds |
+| --- | ---: | ---: |
+| Python | 2.121632 | 1.367047–4.427479 |
+| Rust with NumPy account sums | 0.108604 | 0.103602–0.127810 |
+
+The ratio of medians is 19.54. Runtime varied across batches; the measurement covers the
+holding kernel and its wrapper only. Solver and end-to-end speedups are not measured.
+
+`python run_compare.py` passed both public-data checks: PyPortfolioOpt/CLARABEL continuous
+variance against the KKT frontier on port1, and vectorbt cumulative wealth against
+buy-and-hold accounts on indtrack1. The maximum wealth difference was
+1.2434497875801753e-14. The optional library versions and reproduction commands are in
+[Integrations](INTEGRATIONS.md). OpenBB export parsing was tested on offline fixtures;
+live provider access was not checked. No new empirical comparison or investment-performance
+claim was produced.
+
 ## Formulation
 
 All optimization routes reach `pf/rw.py` for the budget, weight bounds and cardinality row.

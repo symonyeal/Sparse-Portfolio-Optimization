@@ -1,7 +1,20 @@
 # Sources
 
-Status on 2 October 2026: opened (full text read, with the version named), abstract only,
+Original register, 2 October 2026: opened (full text read, with the version named), abstract only,
 or not opened. Records were corrected against Crossref. Formulations cite opened sources.
+
+## Optional tool review (26 October 2026)
+
+| Source | Status | Use |
+| --- | --- | --- |
+| [PyPortfolioOpt](https://github.com/PyPortfolio/PyPortfolioOpt), README and `efficient_frontier/efficient_frontier.py` | opened: upstream README and relevant objective/constraint implementation | Optional continuous variance check; explicit equality mean row, raw weights, no annualization |
+| [vectorbt](https://github.com/polakowo/vectorbt), README, `returns/accessors.py`, `LICENSE.md` | opened: README, relevant returns accessor API and license | Optional check on evaluated wealth; Apache 2.0 with Commons Clause; no code copied |
+| [awesome-quant](https://github.com/wilsonfreitas/awesome-quant), README | opened: resource categories and numerical library list | Dependency overlap review only |
+| [Vibe-Trading](https://github.com/HKUDS/Vibe-Trading), README | opened: architecture and feature overview | Applicability review only; agent and execution stack omitted |
+| [OpenBB](https://github.com/openbq-org/OpenBB), README and `equity_historical.py` standard model | opened: export example and date/symbol/close schema | Offline export reader; adjustment convention is provider-specific |
+| [Eiten](https://github.com/tradytics/eiten), README | opened: strategy list and forward-test interface | Comparison-set review only; no algorithm or empirical number transcribed |
+
+Release pins and locally exercised interfaces are recorded in [Integrations](INTEGRATIONS.md).
 
 ## Formulations and algorithms
 
