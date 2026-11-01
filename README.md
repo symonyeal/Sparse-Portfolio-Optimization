@@ -35,12 +35,12 @@ over the [existing literature](docs/SOURCES.md).
 
 | Model | Criterion | Reference route | Independent check |
 | --- | --- | --- | --- |
-| F1 | mean–variance | SCIP | HiGHS cutting-plane bounds; continuous KKT frontier |
+| F1 | mean–variance | SCIP | continuous KKT frontier; pinned cutting-plane bounds |
 | F1p | perspective reformulation of F1 | SCIP | objective agreement with F1 |
 | F2 | mean absolute deviation | HiGHS | deviation recomputed from returns |
 | F3 | CVaR | HiGHS | sorted losses with a fractional tail atom |
 | F4 | lexicographic regression tracking, zero costs | HiGHS | regression and tracking error from returns |
-| F5 | mean, variance and third central moment | SCIP | exhaustive small-support simplex grid |
+| F5 | mean, variance and third central moment | SCIP | pinned small-support lattice value |
 
 The [model](docs/MODEL.md) states the equations and source restrictions. F4 has no identical
 target in the paper's transaction-cost table. F5's default central-moment coefficients do
@@ -53,39 +53,31 @@ its achieved gap. [Open issues](docs/ISSUES.md) identifies unavailable empirical
 
 ## Reproduction
 
-Use Python with the dependencies in `requirements.txt`. No commercial solver is required.
+One Rust crate, `pf`, with HiGHS and SCIP as its solvers. No commercial solver is required.
+Building HiGHS needs CMake and a C++ compiler; SCIP's bindings need libclang. The build
+downloads SCIP's prebuilt library.
 
 ```text
-python -m pip install -r requirements.txt
-python -m pytest -q
-python -m ruff check .
-python -m pip check
-python run_bench.py --run --only g1-port1 --time 10
-python run_bench.py --run --only g2-port1-lam0.25 --time 60 --missing
-python run_bench.py
+cargo test --locked
+cargo run --release -- bench --run --only g1-port1 --time 10
+cargo run --release -- bench --run --only rq5-port1-K5 --time 60 --missing
+cargo run --release -- bench
 ```
 
-On the project owner's Windows machine, pass pytest an explicit `--basetemp` under
-`Claude Func Folder`. Benchmark bundles require a committed, clean code tree. Markdown-only
-changes do not dirty code identity. `--missing` reuses only admitted bundles with matching
-code, parameters and inputs. `--jobs` controls parallel cases; each completed case is saved.
-The manual GitHub Actions workflow runs one benchmark case per job and uploads its bundles.
+`bench` without `--run` regenerates the benchmark table from admitted bundles. Bundles require
+a committed, clean tree and a binary built from it; Markdown-only changes do not dirty code
+identity. `--missing` reuses only admitted bundles with matching code, parameters and inputs.
+`--jobs` sets parallel cases; each completed case is saved. The manual GitHub Actions workflow
+runs one case per job and uploads its bundles.
 
 OR-Library data are included with their MIT notice and SHA-256 pins. They are survivor
-universes and support computational validation only. The French risk-free file is fetched
-at runtime; CRSP data must remain outside the repository. [Data](docs/DATA.md) defines the
-accepted schema and delisting treatment.
+universes and support computational validation only. `pf fetch` downloads the French
+risk-free file; CRSP data must remain outside the repository. [Data](docs/DATA.md) defines
+the accepted schema and delisting treatment.
 
-`run_boot.py` runs the Bessembinder replication; `run_oos.py` runs empirical comparisons.
-Both require the licensed extract and follow the [pre-registration](docs/PLAN.md).
-Synthetic fixtures test arithmetic, selection timing and numerical properties only.
+`pf boot --crsp PATH` runs the Bessembinder replication; `pf oos --crsp PATH` runs the
+empirical comparisons. Both require the licensed extract and follow the
+[pre-registration](docs/PLAN.md). Synthetic fixtures test arithmetic, selection timing and
+numerical properties only.
 
 Code: [MIT](LICENSE). OR-Library data: [separate MIT notice](data/orlib/LICENSE).
-
-## Optional research tools
-
-[Integrations](docs/INTEGRATIONS.md) describes the selectable Rust holding backend,
-PyPortfolioOpt continuous-frontier checks, vectorbt checks on evaluated wealth, and an
-offline OpenBB export reader. `python run_compare.py` runs the external arithmetic checks
-after installing the optional research requirements. The registered empirical strategy set
-and the default Python calculation are preserved.

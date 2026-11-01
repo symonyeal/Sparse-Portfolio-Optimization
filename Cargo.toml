@@ -1,0 +1,40 @@
+[package]
+name = "pf"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Cardinality-constrained portfolio selection evaluated by long-horizon wealth creation"
+license = "MIT"
+repository = "https://github.com/symonyeal/Sparse-Portfolio-Optimization"
+publish = false
+
+[dependencies]
+csv = "1.4"
+highs = "2.4"
+# Direct only for Highs_getInt64InfoValue (the int64 MIP node count).
+highs-sys = "1.15"
+libm = "0.2"
+nalgebra = { version = "0.35", default-features = false, features = ["std"] }
+rand = "0.9"
+russcip = { version = "0.11", default-features = false, features = ["bundled"] }
+# Direct dependency only so that build.rs receives DEP_SCIP_LIBDIR (the SCIP install it links).
+scip-sys = { version = "0.1.28", default-features = false, features = ["bundled"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[build-dependencies]
+sha2 = "0.10"
+
+[lints.clippy]
+# The code transcribes the sources' notation: single-letter and short symbols are deliberate.
+many_single_char_names = "allow"
+too_many_arguments = "allow"
+needless_range_loop = "allow"
+type_complexity = "allow"
+
+[profile.release]
+lto = "thin"
+
+[profile.test]
+opt-level = 2

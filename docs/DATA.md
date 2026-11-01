@@ -6,7 +6,7 @@
 | D2 | OR-Library `indtrack1`–`indtrack8` | `data/orlib` | survivors | F2–F5 checks, F4 |
 | D3 | CRSP monthly stock file with delisting fields, via WRDS | never; licensed to the owner | full, with delistings | RQ1, RQ2, RQ4 |
 | D4 | French data library, `F-F_Research_Data_Factors` RF | fetched to `data/fetched/`, ignored by Git | n/a | B5, excess returns |
-| D5 | `dat.syn` | generated | by construction | code properties only |
+| D5 | synthetic CRSP-format panel and RF series | `tests/data` | by construction | the pinned out-of-sample test only |
 
 ## D1 and D2 formats
 
@@ -17,7 +17,7 @@
   frontier, computed by Chang et al. with NAG E04NAF at 2,000 return targets.
 - `indtrackk`: $N$, $T$; index levels $t = 0..T$; each stock's levels $t = 0..T$.
   indtrack7 declares $N = 1318$ and holds 1,319 stock series; indtrack8 declares 2,151 and holds
-  2,152. The loader refuses the trailing series unless `tail=True`.
+  2,152. The loader refuses the trailing series unless called with `tail`.
 - Returns from D2 are log returns, as in Canakgoz and Beasley (2009); 290 weekly returns.
 
 ## D3: the expected CRSP extract
@@ -30,7 +30,7 @@ $-99$, blank) become nan with the code kept. Share codes outside 10–12 are dro
 Market value is $\lvert\text{PRC}\rvert\cdot\text{SHROUT}$.
 
 Place the file outside the repository or under `data/crsp/` (ignored), and pass its path to
-`run_boot.py` or `run_oos.py`. Bundles record its SHA-256, never its rows.
+`pf boot --crsp` or `pf oos --crsp`. Bundles record its SHA-256, never its rows.
 
 RQ1 evaluates July 1926–December 2016 and also requires June 1926 price and share observations
 for July's beginning values. T-bill coverage is required for the evaluated months only.
@@ -41,6 +41,6 @@ for July's beginning values. T-bill coverage is required for the evaluated month
 | --- | --- |
 | RET missing, DLRET present | $R = $ DLRET |
 | both present | $R = (1+\text{RET})(1+\text{DLRET}) - 1$ |
-| DLRET missing after a performance delisting, `fill=True` | $-0.30$ NYSE/AMEX (codes 500, 520–584), $-0.55$ Nasdaq (500, 505–588) |
+| DLRET missing after a performance delisting, `--fill` | $-0.30$ NYSE/AMEX (codes 500, 520–584), $-0.55$ Nasdaq (500, 505–588) |
 | return missing during a holding, with no recorded delisting | refused, including an unexplained end of the series |
 | return missing after a recorded delisting month | proceeds held at the T-bill rate |

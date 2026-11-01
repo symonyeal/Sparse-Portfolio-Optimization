@@ -1,5 +1,0 @@
-numpy>=2.0
-scipy>=1.15
-PySCIPOpt>=6.2
-pytest>=8.0
-ruff==0.16.7
