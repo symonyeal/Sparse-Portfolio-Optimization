@@ -1,0 +1,71 @@
+{
+  "N": 6,
+  "S": 36,
+  "bundle": {
+    "code": {
+      "commit": "e5bc8fa6a6a410317502562500354c5970e1db96",
+      "dirty": false,
+      "source": "d4cd1b8ac089ae63f770c56a446ec91f225dfccb771739f9afae3e1cae036528"
+    },
+    "command": [
+      "pf",
+      "bench",
+      "--run",
+      "--only",
+      "g1-port1",
+      "--only",
+      "rq5-port1-K5",
+      "--only",
+      "f2-indtrack1-K5",
+      "--only",
+      "f3-indtrack1-K5",
+      "--only",
+      "f4-indtrack1",
+      "--only",
+      "f5-indtrack1-S36-N6-K2",
+      "--time",
+      "60",
+      "--jobs",
+      "1"
+    ],
+    "host": {
+      "arch": "x86_64",
+      "cpu": "AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD",
+      "node": "DESKTOP-5OHCPE2",
+      "os": "windows",
+      "pf": "0.2.0",
+      "scip": 10.0
+    },
+    "inputs": {
+      "indtrack1": "258b917e304e21c87ae481b9baba0aefe877b657fa63483255c23162a74aa629"
+    },
+    "key": "f5-indtrack1-S36-N6-K2",
+    "pa": {
+      "K": 2,
+      "N": 6,
+      "S": 36,
+      "g": 3.0,
+      "k": 1,
+      "tl": 60.0
+    },
+    "schema": 2
+  },
+  "c": {
+    "bd": 0.012602516085099049,
+    "bs": "SCIP getDualbound",
+    "f": 0.012602516085099049,
+    "first": "Optimal",
+    "g": 0.0,
+    "msg": "Optimal",
+    "nd": 35,
+    "ps": true,
+    "rg": 0.0,
+    "rt": 0.012602516567514748,
+    "sg": 560.6462814948861,
+    "sn": "max",
+    "st": "opt",
+    "t": 0.1177587
+  },
+  "f": 0.012602516084074018,
+  "wall": 0.1282275
+}
