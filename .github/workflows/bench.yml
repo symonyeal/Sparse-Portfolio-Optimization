@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       cases:
-        description: 'JSON array of exact public case keys'
+        description: 'JSON array of public case keys or prefixes'
         required: true
-        default: '["g1-port1", "g2-port1-lam0.25", "f4-indtrack1", "f5-indtrack1-K3"]'
+        default: '["g1-port1", "rq5-port1-K5-f1", "f4-indtrack1", "f5-indtrack1-S36-N6-K2"]'
       seconds:
         description: 'Per-solve limit in seconds'
         required: true
@@ -23,16 +23,12 @@ jobs:
         case: ${{ fromJSON(inputs.cases) }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-          cache: pip
-      - run: python -m pip install -r requirements.txt
+      - uses: dtolnay/rust-toolchain@stable
       - name: Run case
         env:
           CASE: ${{ matrix.case }}
           SECONDS: ${{ inputs.seconds }}
-        run: python run_bench.py --run --only "$CASE" --time "$SECONDS" --jobs 1 --missing --allow-long
+        run: cargo run --release --locked -- bench --run --only "$CASE" --time "$SECONDS" --jobs 1 --missing --allow-long
       - uses: actions/upload-artifact@v4
         if: always()
         with:

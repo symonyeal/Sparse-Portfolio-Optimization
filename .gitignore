@@ -1,7 +1,4 @@
-__pycache__/
-*.pyc
-.pytest_cache/
-.ruff_cache/
+/target/
 # Fetched public files (French data library) are hashed into result bundles, not committed.
 data/fetched/
 # Licensed CRSP/WRDS extracts never enter the repository.
@@ -12,4 +9,3 @@ crsp*.csv
 CRSP*.csv
 # Empirical holdings include licensed identifiers; retain their bundles locally.
 docs/results/oos/
-native/target/

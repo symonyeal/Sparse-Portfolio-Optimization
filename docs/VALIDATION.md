@@ -1,77 +1,66 @@
 # Validation
 
-## Optional tooling checks, 26 October 2026
+## Rust port, 1 November 2026
 
-The full `python -m pytest -q` run with the Rust library and optional Python packages
-enabled returned **182 passed, 1 xfailed**, with no skips, in 43.70 seconds. The expected
-failure is the existing strict G1 printed-frontier gate described below. Python was 3.14;
-NumPy was 2.4.6. `python -m ruff check .` and `python -m pip check` passed. The system
-Python environment's dependency check also passed after the optional packages were
-installed in a separate working directory with `pip --target`.
+The crate replaces the Python package of revision 1ca7e76. Parity was measured against
+result bundles that the Python code wrote at that revision on the same inputs, with the same
+solvers and limits. The harness and its output are kept outside the repository; the pins it
+produced are in `tests/models.rs` and `tests/data/oos.json`.
 
-`cargo test --locked --manifest-path native/Cargo.toml` returned one passing Rust test.
-`cargo fmt --manifest-path native/Cargo.toml -- --check` and
-`cargo clippy --locked --manifest-path native/Cargo.toml -- -D warnings` passed.
-The new GitHub Actions jobs have been configured; their hosted execution is not checked.
+| Case | Status | Objective, relative | Weights, max abs |
+| --- | --- | ---: | ---: |
+| F1, F1p on port1, K = 5, 10 | opt/opt | ≤ 4.1e-15 | ≤ 3.1e-14 |
+| G2 on port1, five λ | opt/opt | ≤ 5.2e-16 | 0 |
+| F2, F3 on indtrack1, K = 5, 10, with and without ρ | opt/opt | ≤ 2.3e-14 | ≤ 6.7e-14 |
+| F4 on indtrack1 | opt/opt | both stages ≈ 0 | 5.0e-16 |
+| F5, 36 × 6 lattice case | opt/opt, 35/35 nodes | 2.8e-16 | 2.4e-18 |
+| F5 on indtrack1, K = 3, 60 s | limit/limit | 6.0e-16 | 1.5e-10 |
 
-The Rust holding tests compare output bytes against Python for seeded synthetic panels,
-including delistings, missing listed returns, total loss, zero weights, tolerated tiny
-negative weights and reordered columns. They also reject an intentionally altered path
-and a mismatched embedded source. A synthetic `run_oos.py` test checks identical terminal
-wealth and selections, separate Rust bundle keys, and the recorded native binary hash.
-The Python route also matches the baseline captured before the port on the saved panel.
-Parity on a licensed CRSP panel is not measured because the extract is unavailable.
+F4 on indtrack2 reaches the same zero objectives with different weights (max 0.46): the
+optimum is not unique there. F5 at its time limit has the same incumbent and a dual bound
+2.5% apart: the two SCIP builds take different search paths. The F2 node counts
+differ (103 against 184 at K = 5) for the same reason.
+The independent routes (`mv::qp`, `est::shrink`, `est::ols`) agree to 3.5e-15 or better.
 
-The final same-input timing used 100 holding calls per batch, five batches per backend,
-H = 120 months and K = 100 supplied holdings. Both routes matched the saved baseline exactly.
-The seed was 26; this was a synthetic arithmetic check on the same Windows laptop.
+Out of sample, on the synthetic 40-firm panel in `tests/data` (K = 3, M = 12, Nc = 8,
+H = 6, m = 6 and 12, with and without the Shumway fill), B2, B3, F2 and F3 match at every
+one of the 43 dates: the same selection status, the same holdings, and terminal wealth within
+4.3e-16 relative. F1 has the same status and holdings, with wealth within 7.7e-6 relative;
+the difference comes from SCIP's 1e-9 feasibility tolerance at each solve. F5 differs at one
+or two dates, all of them solves stopped by the 20 s limit, and its wealth then differs by
+up to 6.2%. F5 is therefore not pinned out of sample.
 
-| Holding backend | Median seconds per 100 calls | Observed range, seconds |
-| --- | ---: | ---: |
-| Python | 2.121632 | 1.367047–4.427479 |
-| Rust with NumPy account sums | 0.108604 | 0.103602–0.127810 |
-
-The ratio of medians is 19.54. Runtime varied across batches; the measurement covers the
-holding kernel and its wrapper only. Solver and end-to-end speedups are not measured.
-
-`python run_compare.py` passed both public-data checks: PyPortfolioOpt/CLARABEL continuous
-variance against the KKT frontier on port1, and vectorbt cumulative wealth against
-buy-and-hold accounts on indtrack1. The maximum wealth difference was
-1.2434497875801753e-14. The optional library versions and reproduction commands are in
-[Integrations](INTEGRATIONS.md). OpenBB export parsing was tested on offline fixtures;
-live provider access was not checked. No new empirical comparison or investment-performance
-claim was produced.
+Gates on this revision: `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D
+warnings` pass; `cargo test --locked` runs 52 tests and all pass (43 unit, 8 model, 1
+out-of-sample).
 
 ## Formulation
 
-All optimization routes reach `pf/rw.py` for the budget, weight bounds and cardinality row.
+All optimization routes reach `src/x.rs` for the budget, weight bounds and cardinality row.
 The indicator count is distinguished from the number of positive weights when the floor is
 zero. F4 retains the source's regression approximation with the owner-approved zero-cost
 budget; the original transaction-cost results are not targets for this restriction.
 
 ## Algorithms
 
-The [model](MODEL.md#6-algorithms-and-independent-checks) lists reference and independent
-routes. Each check recomputes from data and returned weights rather than rebuilding the
-optimization rows.
+The [model](MODEL.md#6-algorithms-and-independent-checks) lists the independent routes.
+Each check recomputes from data and returned weights rather than rebuilding the optimization
+rows.
 
 ## Gates
 
-Local reproduction on 20 October 2026: the existing suite returned 142 passed and
-one expected failure at the declared printed-precision frontier gate. Ruff and
-dependency checks passed. The owner confirmed that no licensed CRSP extract is
-available. Public numerical checks therefore remain the available evidence;
-G3 and the CRSP empirical studies remain blocked, with no investment-performance
-claim added and no synthetic replacement for the missing empirical data.
+The owner confirmed that no licensed CRSP extract is available. Public numerical checks
+therefore remain the available evidence; G3 and the CRSP empirical studies remain blocked,
+with no investment-performance claim and no synthetic replacement for the missing data.
 
 | Gate | Required evidence |
 | --- | --- |
 | G1 | OR-Library unconstrained frontier at its printed coordinate precision; also report raw differences and KKT residuals |
-| G2 | F1 objective agreement within 1e-6 relative wherever SCIP and ECP both certify; otherwise report the valid ECP bracket |
+| G2 | F1 objective within 1e-6 relative of the pinned cutting-plane value wherever both certify, and inside the pinned bracket to 1e-8 relative everywhere |
 | F1p | equality with F1's integer optimum; root-bound comparison reported independently |
 | F2/F3 | returned primal agrees with independently recomputed absolute deviation or fractional-tail CVaR |
 | F4 restricted | both lexicographic stages certified, source regression identity checked, tracking error recomputed |
-| F5 | SCIP upper bound does not lie below the best small-support grid value |
+| F5 | SCIP dual bound does not lie below the pinned best small-support lattice value |
 | G3 | licensed CRSP replication against Bessembinder Table 4 under PLAN.md; currently blocked |
 
 The source frontier prints both coordinates with finite precision. A variance difference
@@ -80,29 +69,14 @@ rounding both coordinates. A test that accepts a larger unexplained tolerance ca
 establish the printed-precision gate.
 
 G1 is not met on portef1: 142 of 2,000 printed rectangles do not intersect the KKT-certified
-frontier. The maximum separation is $8.960743692193462\times10^{-11}$; the maximum KKT
-residual is $1.3322676295501878\times10^{-15}$. Raw coordinate differences remain reported.
-The strict gate is an expected test failure while the discrepancy remains unresolved.
+frontier. The maximum separation is $8.96\times10^{-11}$; the KKT residuals stay below
+$10^{-12}$. `tests/models.rs` asserts this count and separation, so the discrepancy
+stays recorded rather than hidden by a looser tolerance.
 
 ## Computation
 
 The authoritative measured tables are [generated from admitted bundles](results/README.md).
-Each bundle records code, input hashes, parameters and host. Tables must reject stale
-bundles; a clean source digest alone cannot establish that the inputs still match.
+Each bundle records code, input hashes, parameters and host. Tables reject stale bundles; a
+clean source digest alone cannot establish that the inputs still match.
 
 No CRSP or out-of-sample empirical run has been performed.
-
-## Verification (5 October 2026)
-
-The full local suite reports 142 passed and one expected failure for G1. Ruff, dependency
-consistency and active documentation links pass. Regression checks cover data validation,
-selection timing, delisting, solver deadlines and bounds, bundle admission and runner inputs.
-
-Ordinary deterministic solver fixtures retain their weights and recomputed objectives after
-cleanup; timing and certificate metadata are excluded from that comparison. Corrections
-cover singular and deterministic inputs, tiny CVaR tails, unavailable observations and
-numerical cancellation in Sharpe inference.
-
-Eight admitted public bundles cover port1 G1/G2, F1/F1p at $K=5$, F2/F3 at $K=5$, restricted
-F4 on indtrack1 and the small F5 grid. The G2 case meets relative objective agreement;
-its stricter bracket-inclusion diagnostic fails. Both diagnostics remain in the table.

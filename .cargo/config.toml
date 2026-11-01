@@ -1,0 +1,4 @@
+# highs-sys builds HiGHS through the cmake crate, which drops optimization flags on MSVC;
+# cl.exe reads extra options from CL. Elsewhere the variable is unused.
+[env]
+CL = "/O2"
