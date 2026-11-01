@@ -1,0 +1,68 @@
+{
+  "bundle": {
+    "code": {
+      "commit": "e5bc8fa6a6a410317502562500354c5970e1db96",
+      "dirty": false,
+      "source": "d4cd1b8ac089ae63f770c56a446ec91f225dfccb771739f9afae3e1cae036528"
+    },
+    "command": [
+      "pf",
+      "bench",
+      "--run",
+      "--only",
+      "g1-port1",
+      "--only",
+      "rq5-port1-K5",
+      "--only",
+      "f2-indtrack1-K5",
+      "--only",
+      "f3-indtrack1-K5",
+      "--only",
+      "f4-indtrack1",
+      "--only",
+      "f5-indtrack1-S36-N6-K2",
+      "--time",
+      "60",
+      "--jobs",
+      "1"
+    ],
+    "host": {
+      "arch": "x86_64",
+      "cpu": "AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD",
+      "node": "DESKTOP-5OHCPE2",
+      "os": "windows",
+      "pf": "0.2.0",
+      "scip": 10.0
+    },
+    "inputs": {
+      "indtrack1": "258b917e304e21c87ae481b9baba0aefe877b657fa63483255c23162a74aa629"
+    },
+    "key": "f2-indtrack1-K5",
+    "pa": {
+      "K": 5,
+      "k": 1,
+      "tl": 60.0
+    },
+    "schema": 2
+  },
+  "c": {
+    "bd": 0.01982186229827028,
+    "bs": "mip_dual_bound",
+    "f": 0.01982186229827028,
+    "first": null,
+    "g": 0.0,
+    "msg": "Optimal",
+    "nd": 103,
+    "ps": true,
+    "rg": 0.0,
+    "rt": null,
+    "sg": 1.0,
+    "sn": "min",
+    "st": "opt",
+    "t": 2.2762892
+  },
+  "diff": 0.0,
+  "ok": true,
+  "recomputed": 0.01982186229827028,
+  "wall": 2.2832415
+}

@@ -1,0 +1,59 @@
+{
+  "bundle": {
+    "code": {
+      "commit": "e5bc8fa6a6a410317502562500354c5970e1db96",
+      "dirty": false,
+      "source": "d4cd1b8ac089ae63f770c56a446ec91f225dfccb771739f9afae3e1cae036528"
+    },
+    "command": [
+      "pf",
+      "bench",
+      "--run",
+      "--only",
+      "g1-port1",
+      "--only",
+      "rq5-port1-K5",
+      "--only",
+      "f2-indtrack1-K5",
+      "--only",
+      "f3-indtrack1-K5",
+      "--only",
+      "f4-indtrack1",
+      "--only",
+      "f5-indtrack1-S36-N6-K2",
+      "--time",
+      "60",
+      "--jobs",
+      "1"
+    ],
+    "host": {
+      "arch": "x86_64",
+      "cpu": "AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD",
+      "node": "DESKTOP-5OHCPE2",
+      "os": "windows",
+      "pf": "0.2.0",
+      "scip": 10.0
+    },
+    "inputs": {
+      "port1": "15615853de5990a70d913c71b91fd90aa45856832c94a6f00e79907fddb5b1d2",
+      "portef1": "dc847d0dcbdf9e295226826df942e702b201db6450c0ec5ea9e28c84b18724a6"
+    },
+    "key": "g1-port1",
+    "pa": {
+      "k": 1,
+      "tl": 60.0
+    },
+    "schema": 2
+  },
+  "half_unit": 0.7645,
+  "kkt": 6.8833827526759706e-15,
+  "max_abs": 2.024764210462049e-10,
+  "max_pos": 1.2242520278787916e-10,
+  "max_rel": 7.766425629345907e-8,
+  "max_separation": 8.960744386082853e-11,
+  "min_neg": -2.024764210462049e-10,
+  "n": 2000,
+  "pass": false,
+  "rectangles": 1858,
+  "wall": 0.0483562
+}
