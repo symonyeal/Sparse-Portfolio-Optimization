@@ -1,0 +1,14 @@
+# Advisory first-party Rust scan. Numerical acceptance remains in the existing tests.
+[constraints]
+# Existing bd/data dependencies and cfg(test) imports form one reported component.
+max_cycles = 1
+
+[[layers]]
+name = "numerical"
+paths = ["src/crt.rs", "src/est.rs", "src/bs.rs", "src/wc.rs", "src/x.rs", "src/lp.rs", "src/scip.rs"]
+order = 1
+
+[[layers]]
+name = "orchestration"
+paths = ["src/main.rs", "src/bench.rs", "src/boot.rs", "src/oos.rs", "src/learn.rs", "src/bd.rs", "src/data.rs"]
+order = 0
