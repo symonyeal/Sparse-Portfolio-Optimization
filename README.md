@@ -68,6 +68,9 @@ cargo run --release -- bench
 cargo run --release -- learn --input PATH_TO_12_Industry_Portfolios_CSV.zip --out industry.json
 ```
 
+The [industry experiment results](docs/results/INDUSTRY.md) compare fixed and adaptive
+estimation windows over 1,071 shared test months, with every allocation and certificate retained.
+
 `bench` without `--run` regenerates the benchmark table from admitted bundles. Bundles require
 a committed, clean tree and a binary built from it; Markdown-only changes do not dirty code
 identity. `--missing` reuses only admitted bundles with matching code, parameters and inputs.
