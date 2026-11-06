@@ -79,7 +79,8 @@ The authoritative measured tables are [generated from admitted bundles](results/
 Each bundle records code, input hashes, parameters and host. Tables reject stale bundles; a
 clean source digest alone cannot establish that the inputs still match.
 
-No CRSP or out-of-sample empirical run has been performed.
+No licensed CRSP individual-stock empirical run has been performed. The separate
+[industry experiment](results/INDUSTRY.md) reports a walk-forward aggregate-portfolio study.
 
 ## Stored results and runtime resources
 
