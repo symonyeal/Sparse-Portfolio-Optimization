@@ -6,7 +6,7 @@
 //! afterwards (`wc`) and used only in `ev`.
 
 use crate::crt::Sol;
-use crate::panel::{Choice, P, b2, b3, b4, run};
+use crate::panel::{Choice, History, P, b2, b3, b4, run};
 use crate::x::{Sn, Xk};
 use crate::{bd, cv, data, est, mad, mv, sk};
 use nalgebra::DMatrix;
@@ -43,12 +43,29 @@ pub struct Run {
     pub seed: u64,
 }
 
+impl Run {
+    fn validate(&self) -> Result<(), String> {
+        if self.k.min(self.mw).min(self.m).min(self.nc).min(self.h) < 1
+            || self.m > self.mw
+            || self.k > self.nc
+            || !self.tl.is_finite()
+            || self.tl <= 0.0
+        {
+            return Err("positive sizes and time, m <= M and K <= Nc are required".into());
+        }
+        Ok(())
+    }
+}
+
 /// Common observed scenarios within the last M months of columns U, with at least m rows.
-pub fn window(pt: &P, u: &[usize], mw: usize, m: usize) -> Result<DMatrix<f64>, String> {
+pub fn window(pt: &History, u: &[usize], mw: usize, m: usize) -> Result<DMatrix<f64>, String> {
     if !(1..=mw).contains(&m) {
         return Err("history threshold must be between 1 and M".into());
     }
     let t = pt.r.nrows();
+    if u.iter().any(|&i| i >= pt.r.ncols()) || u.iter().collect::<std::collections::BTreeSet<_>>().len() != u.len() {
+        return Err("history columns must be unique and in range".into());
+    }
     let rows: Vec<usize> = (t.saturating_sub(mw)..t).filter(|&s| u.iter().all(|&i| pt.r[(s, i)].is_finite())).collect();
     if u.is_empty() || rows.len() < m {
         return Err("not enough common observed scenarios for the history threshold".into());
@@ -57,7 +74,14 @@ pub fn window(pt: &P, u: &[usize], mw: usize, m: usize) -> Result<DMatrix<f64>, 
 }
 
 /// Selection on a cut panel by strategy s.
-pub fn select(s: &str, pt: &P, u: &[usize], c: &Run, g: &mut StdRng) -> Result<Choice, String> {
+pub fn select(s: &str, pt: &History, u: &[usize], c: &Run, g: &mut StdRng) -> Result<Choice, String> {
+    c.validate()?;
+    if u.is_empty()
+        || u.iter().any(|&i| i >= pt.r.ncols())
+        || u.iter().collect::<std::collections::BTreeSet<_>>().len() != u.len()
+    {
+        return Err("selection needs unique nonempty history columns".into());
+    }
     let plain = |(cols, w): (Vec<usize>, Vec<f64>)| Choice { cols, w: Some(w), c: None, meta: Map::new() };
     if s == "b2" {
         return Ok(plain(b2(u)));
@@ -76,15 +100,16 @@ pub fn select(s: &str, pt: &P, u: &[usize], c: &Run, g: &mut StdRng) -> Result<C
     let tl = Some(c.tl);
     let mut meta = Map::new();
     meta.insert("scenarios".into(), json!(y.nrows()));
+    let cov = if matches!(s, "f1" | "f5") { Some(est::shrink(&y)?) } else { None };
     let q: Sol = match s {
         "f1" | "f5" => {
-            let (sh, dl) = est::shrink(&y)?;
+            let (sh, dl) = cov.as_ref().unwrap();
             meta.insert("shrink".into(), json!(dl));
             meta.insert("rho".into(), Value::Null);
             if s == "f1" {
-                mv::f1(&mu, &sh, x, LAM, None, false, tl, 0.0)?
+                mv::f1(&mu, sh, x, LAM, None, false, tl, 0.0)?
             } else {
-                sk::f5(&y, x, GAM, KAP, Some(&sh), tl, 0.0)?
+                sk::f5(&y, x, GAM, KAP, Some(sh), tl, 0.0)?
             }
         }
         "f2" | "f3" => {
@@ -96,16 +121,60 @@ pub fn select(s: &str, pt: &P, u: &[usize], c: &Run, g: &mut StdRng) -> Result<C
         }
         _ => return Err(format!("unknown strategy {s:?}")),
     };
-    let w = q.w.map(|w| {
-        let w: Vec<f64> = w.iter().map(|v| v.max(0.0)).collect();
-        let t: f64 = w.iter().sum();
-        w.iter().map(|v| v / t).collect()
-    });
+    let w = if let (Some(raw), Some(z)) = (&q.w, &q.z) {
+        // A numerical repair is a new allocation. The solver certificate stays on raw.
+        let means = est::mom(&y).0;
+        let rho = meta.get("rho").and_then(Value::as_f64);
+        let w = allocation(raw, z, x, &means, rho)?;
+        let f = match s {
+            "f1" => mv::obj(&w, &means, &cov.as_ref().unwrap().0, LAM),
+            "f2" => mad::dev(&y, &w),
+            "f3" => cv::cvar(&cv::losses(&y, &w), 0.95),
+            "f5" => sk::obj(&w, &y, GAM, KAP, &means, &cov.as_ref().unwrap().0),
+            _ => unreachable!(),
+        };
+        if crate::crt::crossed(q.c.sn, f, q.c.bd, crate::crt::TOL) {
+            return Err("repaired allocation crosses the solver bound".into());
+        }
+        meta.insert(
+            "allocation".into(),
+            json!({
+                "raw_weights": raw, "weights": w, "selectors": z,
+                "repair_l1": raw.iter().zip(&w).map(|(a,b)| (a-b).abs()).sum::<f64>(),
+                "raw_objective": q.f, "objective": f,
+                "gap": crate::crt::num(crate::crt::gap(f, q.c.bd)),
+                "tolerance": 1e-7, "certificate_point": "raw_weights",
+            }),
+        );
+        Some(w)
+    } else {
+        None
+    };
     Ok(Choice { cols: u.to_vec(), w, c: Some(q.c), meta })
+}
+
+/// Executable weights must still satisfy X(K) and the formulation's return floor.
+fn allocation(raw: &[f64], z: &[f64], x: Xk, mu: &[f64], rho: Option<f64>) -> Result<Vec<f64>, String> {
+    if !x.ok(raw, z, 1e-7).is_empty() {
+        return Err("raw allocation violates X(K)".into());
+    }
+    let mut w: Vec<f64> = raw.iter().map(|v| v.max(0.0)).collect();
+    let sum: f64 = w.iter().sum();
+    if !sum.is_finite() || sum <= 0.0 {
+        return Err("allocation has no positive budget".into());
+    }
+    for v in &mut w {
+        *v /= sum;
+    }
+    if !x.ok(&w, z, 1e-7).is_empty() || rho.is_some_and(|r| mv::dot(mu, &w) < r - 1e-9) {
+        return Err("repaired allocation violates X(K) or the return floor".into());
+    }
+    Ok(w)
 }
 
 /// Run strategy s on the panel and return its bundle record.
 pub fn record(s: &str, p0: &P, c: &Run, fills: usize) -> Result<Value, String> {
+    c.validate()?;
     let mut g = StdRng::seed_from_u64(c.seed);
     let tm = p0.r.nrows();
     let dates = (c.mw - 1)..tm.saturating_sub(c.h);
@@ -170,9 +239,7 @@ pub fn main(
     code: &Value,
     cmd: &[String],
 ) -> Result<(), String> {
-    if c.k.min(c.mw).min(c.m).min(c.nc).min(c.h) < 1 || c.m > c.mw || c.k > c.nc || !c.tl.is_finite() || c.tl <= 0.0 {
-        return Err("positive sizes and time, m <= M and K <= Nc are required".into());
-    }
+    c.validate()?;
     if let Some(s) = only.iter().find(|s| !ST.contains(&s.as_str())) {
         return Err(format!("unknown strategy {s:?}"));
     }
@@ -192,4 +259,17 @@ pub fn main(
         println!("{k} {n} dates");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod allocation_tests {
+    use super::*;
+    #[test]
+    fn repair_that_breaks_the_return_floor_is_rejected() {
+        let x = Xk::new(2, 1, 0.0, 1.0, Sn::Le).unwrap();
+        let raw = [1.00000005, 0.0];
+        assert!(x.ok(&raw, &[1.0, 0.0], 1e-7).is_empty());
+        assert!(allocation(&raw, &[1.0, 0.0], x, &[1.0, 0.0], Some(raw[0])).is_err());
+        assert_eq!(allocation(&raw, &[1.0, 0.0], x, &[1.0, 0.0], None).unwrap(), [1.0, 0.0]);
+    }
 }

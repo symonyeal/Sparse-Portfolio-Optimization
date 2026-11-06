@@ -45,6 +45,7 @@ pub struct It {
 
 /// Solve stages 1 and 2; the default sense of X(K) is the source's 1'z = K.
 pub fn it(r: &DMatrix<f64>, ri: &DVector<f64>, x: Xk, ea: f64, tl: Option<f64>, gp: f64) -> Result<It, String> {
+    x.dimension(r.ncols())?;
     if !ea.is_finite() || ea < 0.0 {
         return Err("ea must be finite and nonnegative".into());
     }
@@ -57,14 +58,14 @@ pub fn it(r: &DMatrix<f64>, ri: &DVector<f64>, x: Xk, ea: f64, tl: Option<f64>, 
         (a[i], b[i]) = ols(&r.column(i).into_owned(), ri)?;
     }
     let mut p = Lp::default();
-    x.set(&mut p);
+    let cols = x.set(&mut p);
     let d = p.col(1.0, 0.0, f64::INFINITY, false);
     // D >= q'w - t and D >= t - q'w
     let ab = |p: &mut Lp, q: &[f64], t: f64| {
-        let mut lo: Vec<_> = (0..n).map(|i| (i, -q[i])).collect();
+        let mut lo: Vec<_> = (0..n).map(|i| (cols.w.start + i, -q[i])).collect();
         lo.push((d, 1.0));
         p.row(lo, -t, f64::INFINITY);
-        let mut hi: Vec<_> = (0..n).map(|i| (i, q[i])).collect();
+        let mut hi: Vec<_> = (0..n).map(|i| (cols.w.start + i, q[i])).collect();
         hi.push((d, 1.0));
         p.row(hi, t, f64::INFINITY);
     };
@@ -74,7 +75,7 @@ pub fn it(r: &DMatrix<f64>, ri: &DVector<f64>, x: Xk, ea: f64, tl: Option<f64>, 
     let mut o = It { w: None, a: None, b: None, f1: None, f2: None, c1: c1.clone(), c2: None, st: c1.st };
     let Some(x1) = x1 else { return Ok(o) };
     let checked = |xs: &[f64], c: &C, stage: usize| -> Result<(f64, f64, f64), String> {
-        let (w, z) = (&xs[..n], &xs[n..2 * n]);
+        let (w, z) = (&xs[cols.w.clone()], &xs[cols.z.clone()]);
         if !x.ok(w, z, 1e-7).is_empty() {
             return Err(format!("F4 stage {stage} incumbent violates X(K)"));
         }
@@ -91,13 +92,13 @@ pub fn it(r: &DMatrix<f64>, ri: &DVector<f64>, x: Xk, ea: f64, tl: Option<f64>, 
         Ok((ai, bi, act))
     };
     let (a1, b1, f1) = checked(&x1, &c1, 1)?;
-    o = It { w: Some(x1[..n].to_vec()), a: Some(a1), b: Some(b1), f1: Some(f1), ..o };
+    o = It { w: Some(x1[cols.w.clone()].to_vec()), a: Some(a1), b: Some(b1), f1: Some(f1), ..o };
     if c1.st != St::Opt {
         return Ok(o);
     }
     let mut p2 = p;
     ab(&mut p2, &b, 1.0);
-    p2.row(a.iter().copied().enumerate().collect(), a1 - ea, a1 + ea);
+    p2.row(cols.w.clone().zip(a.iter().copied()).collect(), a1 - ea, a1 + ea);
     let (x2, c2) = p2.solve(tl, gp)?;
     o.st = c2.st;
     o.c2 = Some(c2.clone());
@@ -106,7 +107,7 @@ pub fn it(r: &DMatrix<f64>, ri: &DVector<f64>, x: Xk, ea: f64, tl: Option<f64>, 
     if (a2 - a1).abs() > ea + 1e-8 {
         return Err("F4 stage 2 violates the fixed stage-1 intercept".into());
     }
-    Ok(It { w: Some(x2[..n].to_vec()), a: Some(a2), b: Some(b2), f2: Some(f2), ..o })
+    Ok(It { w: Some(x2[cols.w].to_vec()), a: Some(a2), b: Some(b2), f2: Some(f2), ..o })
 }
 
 /// Tracking error: standard deviation (1/T) of r w - ri.

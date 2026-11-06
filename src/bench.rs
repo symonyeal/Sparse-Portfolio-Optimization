@@ -410,7 +410,7 @@ pub fn table() -> Result<(), String> {
     l.push(String::new());
     let p = root().join("docs").join("results").join("README.md");
     std::fs::create_dir_all(p.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(p, l.join("\n")).map_err(|e| e.to_string())
+    bd::atomic(&p, l.join("\n").as_bytes())
 }
 
 /// Explicit sign for a formatted number.

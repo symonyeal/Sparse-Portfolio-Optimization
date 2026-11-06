@@ -29,14 +29,29 @@ pub enum Sn {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Xk {
-    pub n: usize,
-    pub k: usize,
-    pub e: f64,
-    pub d: f64,
-    pub sn: Sn,
+    n: usize,
+    k: usize,
+    e: f64,
+    d: f64,
+    sn: Sn,
+}
+
+/// Variable blocks owned by X(K), retained when a formulation appends auxiliaries.
+#[derive(Clone, Debug)]
+pub struct Cols {
+    pub w: std::ops::Range<usize>,
+    pub z: std::ops::Range<usize>,
 }
 
 impl Xk {
+    /// Reject data from a different asset universe before building solver rows.
+    pub fn dimension(&self, n: usize) -> Result<(), String> {
+        if self.n != n {
+            return Err(format!("X(K) has {} assets, data have {n}", self.n));
+        }
+        Ok(())
+    }
+
     /// Validated parameters of X(K).
     pub fn new(n: usize, k: usize, e: f64, d: f64, sn: Sn) -> Result<Xk, String> {
         if n < 1 || !(1..=n).contains(&k) {
@@ -49,7 +64,7 @@ impl Xk {
     }
 
     /// Write the columns [w, z] and the rows of X(K) into the empty program p.
-    pub fn set(&self, p: &mut Lp) {
+    pub fn set(&self, p: &mut Lp) -> Cols {
         assert!(p.c.is_empty(), "X(K) owns the first 2N columns");
         let n = self.n;
         let inf = f64::INFINITY;
@@ -68,6 +83,7 @@ impl Xk {
         }
         let k = self.k as f64;
         p.row((n..2 * n).map(|i| (i, 1.0)).collect(), if self.sn == Sn::Eq { k } else { -inf }, k);
+        Cols { w: 0..n, z: n..2 * n }
     }
 
     /// Violated conditions of (w, z) in X(K), checked from the definition; empty if none.
@@ -101,11 +117,11 @@ impl Xk {
 }
 
 /// The return row mu'w >= rho (`eq` false) or mu'w = rho over the w columns of p.
-pub fn ret(p: &mut Lp, mu: &[f64], rho: f64, eq: bool) -> Result<(), String> {
-    if mu.iter().any(|x| !x.is_finite()) || !rho.is_finite() {
+pub fn ret(p: &mut Lp, cols: &Cols, mu: &[f64], rho: f64, eq: bool) -> Result<(), String> {
+    if cols.w.len() != mu.len() || mu.iter().any(|x| !x.is_finite()) || !rho.is_finite() {
         return Err("mu must be finite and rho must be finite".into());
     }
-    p.row(mu.iter().copied().enumerate().collect(), rho, if eq { rho } else { f64::INFINITY });
+    p.row(cols.w.clone().zip(mu.iter().copied()).collect(), rho, if eq { rho } else { f64::INFINITY });
     Ok(())
 }
 

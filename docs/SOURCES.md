@@ -46,6 +46,7 @@ or not opened. Records were corrected against Crossref. Formulations cite opened
 | Kacperczyk, M., Sialm, C. and Zheng, L. (2005), "On the industry concentration of actively managed equity mutual funds", *Journal of Finance* 60(4), 1983–2011, doi:10.1111/j.1540-6261.2005.00785.x | opened | $K = 65$: median stocks held, Table I |
 | Cremers, K. J. M. and Petajisto, A. (2009), "How active is your fund manager? A new measure that predicts performance", *Review of Financial Studies* 22(9), 3329–3365, doi:10.1093/rfs/hhp057 | opened: working paper, 7 August 2006 | Active Share (README) |
 | Kenneth R. French data library, `F-F_Research_Data_Factors` | opened (file fetched) | D4, RF |
+| [Kenneth R. French, 12 Industry Portfolios](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/Data_Library/det_12_ind_port.html), monthly value-weighted block; [library revision policy](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html) | opened 5 November 2026: official construction/library pages and downloaded 202609-vintage CSV ZIP | Separate industry experiment, docs/INDUSTRY.md; aggregate portfolios, not a substitute for D3 |
 | Arko, M. T. (2025), "Stock return underperformance and compositional bias: a replication and extension of Bessembinder (2018)", unpublished manuscript, 15 December 2025 | not opened; cited with the author's permission | context for RQ4 only; no figure used |
 
 ## Software

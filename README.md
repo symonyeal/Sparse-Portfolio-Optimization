@@ -3,13 +3,16 @@
 This repository implements cardinality-constrained portfolio models to investigate whether
 optimizing a limited set of holdings changes the probability of underperforming the
 value-weighted market or Treasury bills, and how the answer depends on the risk measure and
-eligible universe. No empirical investment result has been produced; the planned evaluation
+eligible universe. The individual-stock evaluation
 requires a licensed CRSP extract that includes delisted firms. Nothing here is investment
 advice.
 
 The repository implements mean–variance, perspective mean–variance, absolute-deviation,
 CVaR, restricted index-tracking and third-central-moment formulations. Public benchmark
-results test the implementation; empirical comparisons await the licensed extract.
+results test the implementation; individual-stock comparisons await the licensed extract.
+One separate [industry-allocation experiment](docs/INDUSTRY.md) compares fixed estimation
+windows with a rule that learns from prior realized losses, using French's public research
+portfolios. It records choices, allocation checks, solver bounds and unavailable dates.
 
 ## Background
 
@@ -62,6 +65,7 @@ cargo test --locked
 cargo run --release -- bench --run --only g1-port1 --time 10
 cargo run --release -- bench --run --only rq5-port1-K5 --time 60 --missing
 cargo run --release -- bench
+cargo run --release -- learn --input PATH_TO_12_Industry_Portfolios_CSV.zip --out industry.json
 ```
 
 `bench` without `--run` regenerates the benchmark table from admitted bundles. Bundles require
@@ -69,6 +73,10 @@ a committed, clean tree and a binary built from it; Markdown-only changes do not
 identity. `--missing` reuses only admitted bundles with matching code, parameters and inputs.
 `--jobs` sets parallel cases; each completed case is saved. The manual GitHub Actions workflow
 runs one case per job and uploads its bundles.
+
+Commands resolve resources from the working directory; use `--root PATH` for another
+checkout. Unknown flags fail before running. A writer lease protects each output, and
+schema-3 bundle admission checks the payload as well as its provenance.
 
 OR-Library data are included with their MIT notice and SHA-256 pins. They are survivor
 universes and support computational validation only. `pf fetch` downloads the French

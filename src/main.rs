@@ -12,7 +12,7 @@
 //! refuses to write bundles from a dirty tree or from a binary older than its sources. `oos` and
 //! `boot` need the licensed CRSP extract (docs/DATA.md); without one, P5 and P6 stay blocked.
 
-use pf::{bd, bench, boot, data, oos};
+use pf::{bd, bench, boot, data, learn, oos};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -23,11 +23,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 struct Args(BTreeMap<String, Vec<String>>);
 
 impl Args {
-    fn parse(a: &[String], switches: &[&str], lists: &[&str]) -> Result<Args, String> {
+    fn parse(a: &[String], switches: &[&str], lists: &[&str], values: &[&str]) -> Result<Args, String> {
         let mut o: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut i = 0;
         while i < a.len() {
             let f = a[i].strip_prefix("--").ok_or(format!("unexpected argument {:?}", a[i]))?.to_string();
+            if f != "root"
+                && !switches.contains(&f.as_str())
+                && !lists.contains(&f.as_str())
+                && !values.contains(&f.as_str())
+            {
+                return Err(format!("unknown option --{f}"));
+            }
             i += 1;
             let e = o.entry(f.clone()).or_default();
             if switches.contains(&f.as_str()) {
@@ -78,6 +85,9 @@ fn clean() -> Result<serde_json::Value, String> {
 }
 
 fn bench(a: &Args, cmd: &[String]) -> Result<(), String> {
+    let out = bench::out();
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let _lease = bd::lease(&out)?;
     let tl: f64 = a.get("time", 60.0)?;
     let jobs: usize = a.get("jobs", 1)?;
     if !tl.is_finite() || tl <= 0.0 || jobs < 1 {
@@ -129,13 +139,27 @@ fn rf(a: &Args) -> PathBuf {
     a.path("rf").unwrap_or_else(data::ff_path)
 }
 
+fn configure(a: &Args) -> Result<(), String> {
+    data::set_root(&a.path("root").unwrap_or_else(data::root))
+}
+
 fn run(argv: &[String]) -> Result<(), String> {
     let (c, rest) = argv.split_first().ok_or("usage: pf bench|oos|boot|fetch [options]; see src/main.rs")?;
     let cmd: Vec<String> = std::iter::once("pf".to_string()).chain(argv.iter().cloned()).collect();
     match c.as_str() {
-        "bench" => bench(&Args::parse(rest, &["run", "missing", "allow-long"], &[])?, &cmd),
+        "bench" => {
+            let a = Args::parse(rest, &["run", "missing", "allow-long"], &[], &["only", "time", "jobs"])?;
+            configure(&a)?;
+            bench(&a, &cmd)
+        }
         "oos" => {
-            let a = Args::parse(rest, &["fill", "missing"], &[])?;
+            let a = Args::parse(
+                rest,
+                &["fill", "missing"],
+                &[],
+                &["crsp", "rf", "only", "K", "M", "m", "Nc", "H", "time", "seed"],
+            )?;
+            configure(&a)?;
             let crsp = a.path("crsp").ok_or("no CRSP extract supplied (--crsp): P6 is blocked; see docs/PLAN.md")?;
             let r = oos::Run {
                 k: a.get("K", 10)?,
@@ -147,10 +171,14 @@ fn run(argv: &[String]) -> Result<(), String> {
                 tl: a.get("time", 60.0)?,
                 seed: a.get("seed", 0)?,
             };
-            oos::main(&crsp, &rf(&a), &a.all("only"), &r, a.has("missing"), &oos::out(), &clean()?, &cmd)
+            let out = oos::out();
+            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            let _lease = bd::lease(&out)?;
+            oos::main(&crsp, &rf(&a), &a.all("only"), &r, a.has("missing"), &out, &clean()?, &cmd)
         }
         "boot" => {
-            let a = Args::parse(rest, &["missing"], &["sizes"])?;
+            let a = Args::parse(rest, &["missing"], &["sizes"], &["crsp", "rf", "n", "seed"])?;
+            configure(&a)?;
             let crsp = a.path("crsp").ok_or("no CRSP extract supplied (--crsp): P5 is blocked; see docs/PLAN.md")?;
             let sizes: Vec<usize> = if a.has("sizes") {
                 a.all("sizes")
@@ -160,6 +188,9 @@ fn run(argv: &[String]) -> Result<(), String> {
             } else {
                 vec![1, 5, 25, 50, 100]
             };
+            let out = boot::out();
+            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            let _lease = bd::lease(&out)?;
             boot::main(
                 &crsp,
                 &rf(&a),
@@ -167,18 +198,28 @@ fn run(argv: &[String]) -> Result<(), String> {
                 &sizes,
                 a.get("seed", 0)?,
                 a.has("missing"),
-                &boot::out(),
+                &out,
                 &clean()?,
                 &cmd,
             )
         }
         "fetch" => {
+            let a = Args::parse(rest, &[], &[], &[])?;
+            configure(&a)?;
             let p = data::ff_path();
             let h = data::fetch(&p)?;
             println!("{} {h}", p.display());
             Ok(())
         }
-        _ => Err(format!("unknown command {c:?}; use bench, oos, boot or fetch")),
+        "learn" => {
+            let a = Args::parse(rest, &[], &[], &["input", "out"])?;
+            configure(&a)?;
+            let input = a.path("input").ok_or("learn needs --input PATH to the French industry archive")?;
+            let out = a.path("out").unwrap_or_else(|| data::root().join("docs/results/industry.json"));
+            clean()?;
+            learn::main(&input, &out)
+        }
+        _ => Err(format!("unknown command {c:?}; use bench, oos, boot, fetch or learn")),
     }
 }
 
@@ -190,5 +231,20 @@ fn main() -> ExitCode {
             eprintln!("pf: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unknown_flags_fail_before_execution() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(Args::parse(&a(&["--seedx", "5"]), &[], &[], &["seed"]).is_err());
+        assert!(Args::parse(&a(&["--seed", "5", "--root", "."]), &[], &[], &["seed"]).is_ok());
+        assert!(Args::parse(&a(&["--seed"]), &[], &[], &["seed"]).is_err());
+        assert!(run(&a(&["fetch", "--time", "3"])).is_err());
+        assert!(run(&a(&["bench", "--tiem", "3"])).is_err());
     }
 }

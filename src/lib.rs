@@ -14,6 +14,7 @@ pub mod data;
 pub mod est;
 pub mod ev;
 pub mod it;
+pub mod learn;
 pub mod lp;
 pub mod mad;
 pub mod mv;

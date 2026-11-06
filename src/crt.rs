@@ -164,12 +164,12 @@ pub struct Sol {
 
 impl Sol {
     /// Split a solver point x = [w, z, ...] over N assets, recomputing the objective by obj.
-    pub fn of(x: Option<Vec<f64>>, n: usize, c: C, obj: impl Fn(&[f64]) -> f64) -> Sol {
+    pub fn of(x: Option<Vec<f64>>, cols: crate::x::Cols, c: C, obj: impl Fn(&[f64]) -> f64) -> Sol {
         match x {
             None => Sol { w: None, z: None, f: f64::NAN, c },
             Some(x) => {
-                let w = x[..n].to_vec();
-                Sol { f: obj(&w), z: Some(x[n..2 * n].iter().map(|v| v.round()).collect()), w: Some(w), c }
+                let w = x[cols.w].to_vec();
+                Sol { f: obj(&w), z: Some(x[cols.z].iter().map(|v| v.round()).collect()), w: Some(w), c }
             }
         }
     }
