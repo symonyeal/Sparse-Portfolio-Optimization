@@ -25,3 +25,7 @@ when invoked directly on the repository; that is a different scan scope.
 Validation on 2026-11-06 rejected a planted reverse import in an isolated source copy. The Rust
 resolver misses some qualified cross-crate imports in the other trial projects, so these checks
 remain advisory. No CI gate is added; the existing solver, format, Clippy and test checks remain acceptance.
+
+The shared runner also checks Cargo's declared workspace dependencies against layers. This repository
+has one crate, so that additional crate-level check reports not applicable; its file-level analysis
+still comes from Sentrux.
