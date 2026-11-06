@@ -54,6 +54,7 @@ pub fn f5(
     gp: f64,
 ) -> Result<Sol, String> {
     rr(r)?;
+    x.dimension(r.ncols())?;
     limits(tl, gp)?;
     if !g.is_finite() || !k.is_finite() {
         return Err("g and k must be finite".into());
@@ -65,24 +66,25 @@ pub fn f5(
     let a = centre(r, &mu);
     let c = scale(sm);
     let mut p = Lp::default();
-    x.set(&mut p);
+    let cols = x.set(&mut p);
     let y0 = p.c.len();
     for t in 0..s {
         let lo: f64 = a.row(t).iter().map(|v| v.min(0.0)).sum();
         let hi: f64 = a.row(t).iter().map(|v| v.max(0.0)).sum();
         let y = p.col(0.0, lo, hi, false);
-        let mut row: Vec<_> = (0..n).map(|i| (i, -a[(t, i)])).collect();
+        let mut row: Vec<_> = (0..n).map(|i| (cols.w.start + i, -a[(t, i)])).collect();
         row.push((y, 1.0));
         p.row(row, 0.0, 0.0);
     }
     let q = p.col(1.0, f64::NEG_INFINITY, f64::INFINITY, false);
     let mut sp = scip::open(&p, Sense::Max, FT, gp)?;
     let v = &sp.v;
-    let lin = Expr::sum((0..n).map(|i| c * mu[i] * Expr::var(&v[i])));
+    let w = &v[cols.w.clone()];
+    let lin = Expr::sum((0..n).map(|i| c * mu[i] * Expr::var(&w[i])));
     let qd = Expr::sum(
         (0..n)
             .flat_map(|i| (0..n).map(move |j| (i, j)))
-            .map(|(i, j)| sm[(i, j)] * (Expr::var(&v[i]) * Expr::var(&v[j]))),
+            .map(|(i, j)| sm[(i, j)] * (Expr::var(&w[i]) * Expr::var(&w[j]))),
     );
     // y*y*y, not pow(y, 3): SCIP 10 handles the monomial far better here (35 against 1228
     // nodes on the 36 x 6 lattice case, and an 11x weaker 60 s bound on indtrack1, K = 3).
@@ -93,5 +95,5 @@ pub fn f5(
     let e = lin - 0.5 * g * c * qd + (k * c / (6.0 * s as f64)) * cub - Expr::var(&v[q]);
     sp.m.add(cons().expression(e).ge(0.0));
     let (xv, cert) = scip::solve(sp, Sense::Max, tl)?;
-    Ok(Sol::of(xv, n, cert.un(c), |w| obj(w, r, g, k, &mu, sm)))
+    Ok(Sol::of(xv, cols, cert.un(c), |w| obj(w, r, g, k, &mu, sm)))
 }

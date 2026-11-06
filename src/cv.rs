@@ -26,24 +26,25 @@ use nalgebra::DMatrix;
 /// Solve F3; f is the CVaR recomputed from the sorted losses.
 pub fn cv(r: &DMatrix<f64>, x: Xk, b: f64, rho: Option<f64>, tl: Option<f64>, gp: f64) -> Result<Sol, String> {
     rr(r)?;
+    x.dimension(r.ncols())?;
     if !(0.0 < b && b < 1.0) {
         return Err("b must lie in (0, 1)".into());
     }
     let (s, n) = r.shape();
     let mut p = Lp::default();
-    x.set(&mut p);
+    let cols = x.set(&mut p);
     if let Some(rho) = rho {
-        ret(&mut p, &mom(r).0, rho, false)?;
+        ret(&mut p, &cols, &mom(r).0, rho, false)?;
     }
     let al = p.col(1.0, f64::NEG_INFINITY, f64::INFINITY, false);
     for k in 0..s {
         let u = p.col(1.0 / ((1.0 - b) * s as f64), 0.0, f64::INFINITY, false);
-        let mut row: Vec<_> = (0..n).map(|i| (i, r[(k, i)])).collect();
+        let mut row: Vec<_> = (0..n).map(|i| (cols.w.start + i, r[(k, i)])).collect();
         row.extend([(al, 1.0), (u, 1.0)]); // r_s'w + al + u_s >= 0
         p.row(row, 0.0, f64::INFINITY);
     }
     let (xv, c) = p.solve(tl, gp)?;
-    Ok(Sol::of(xv, n, c, |w| cvar(&losses(r, w), b)))
+    Ok(Sol::of(xv, cols, c, |w| cvar(&losses(r, w), b)))
 }
 
 /// Scenario losses -r_s'w.

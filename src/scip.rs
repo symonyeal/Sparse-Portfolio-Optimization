@@ -23,6 +23,9 @@ pub struct Sp {
 /// A SCIP model holding the columns (with objective) and rows of p.
 pub fn open(p: &Lp, sn: Sense, ft: f64, gp: f64) -> Result<Sp, String> {
     limits(None, gp)?;
+    if (0..p.c.len()).any(|j| p.int[j] && (p.lb[j] != 0.0 || p.ub[j] != 1.0)) {
+        return Err("SCIP adapter supports binary integer columns only".into());
+    }
     let mut m = Model::default().hide_output();
     m = if sn == Sense::Min { m.minimize() } else { m.maximize() };
     let r = |e| format!("SCIP parameter: {e:?}");

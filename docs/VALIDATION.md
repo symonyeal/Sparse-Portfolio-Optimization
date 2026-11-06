@@ -80,3 +80,22 @@ Each bundle records code, input hashes, parameters and host. Tables reject stale
 clean source digest alone cannot establish that the inputs still match.
 
 No CRSP or out-of-sample empirical run has been performed.
+
+## Stored results and runtime resources
+
+Bundle schema 3 adds a digest of the result payload and admission rules for each retained
+result family. Admission checks required fields, paired dates and outcomes, allowed statuses,
+certificate bounds and gaps, and recomputed objective agreement. A digest detects changed
+bytes; these structural checks do not re-prove an optimization result. Schema 2 bundles are
+not resumed or rendered and must be recomputed with the current sources.
+
+The CLI owns a writer lease for the complete benchmark, bootstrap or out-of-sample command;
+individual publications also acquire a file lease. Tables and bundles are flushed to a
+pending file and renamed. A failed French factors download or monthly-block validation
+preserves the previously accepted file. An interrupted writer can leave a `.lock` or
+`.pending` file: inspect the process and archive the abandoned files before retrying.
+Crash durability of directory renames and network filesystems has not been measured.
+
+Resource paths resolve from the working directory, or the immutable root supplied by
+`--root PATH`. A relocated executable does not read from its build checkout. Set this root
+before workers start; a second configuration attempt is rejected.

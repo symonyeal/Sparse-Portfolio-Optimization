@@ -29,19 +29,53 @@ use serde_json::{Map, Value};
 
 #[derive(Clone, Debug)]
 pub struct P {
-    pub mo: Vec<i64>,
-    pub ids: Vec<i64>,
-    pub r: DMatrix<f64>,
-    pub me: DMatrix<f64>,
-    pub rf: Vec<f64>,
-    pub pct: DMatrix<i64>,
-    pub pc: Vec<i64>,
-    pub ls: Vec<usize>,
-    pub j: Vec<usize>,
+    pub(crate) mo: Vec<i64>,
+    pub(crate) ids: Vec<i64>,
+    pub(crate) r: DMatrix<f64>,
+    pub(crate) me: DMatrix<f64>,
+    pub(crate) rf: Vec<f64>,
+    pub(crate) pct: DMatrix<i64>,
+    pub(crate) pc: Vec<i64>,
+    pub(crate) ls: Vec<usize>,
+    pub(crate) j: Vec<usize>,
+}
+
+/// An immutable information set made only by cutting a validated full panel.
+#[derive(Clone, Debug)]
+pub struct History(P);
+
+impl std::ops::Deref for History {
+    type Target = P;
+    fn deref(&self) -> &P {
+        &self.0
+    }
 }
 
 impl P {
+    pub fn months(&self) -> &[i64] {
+        &self.mo
+    }
+    pub fn returns(&self) -> &DMatrix<f64> {
+        &self.r
+    }
     pub fn new(
+        mo: Vec<i64>,
+        ids: Vec<i64>,
+        pct: DMatrix<i64>,
+        r: DMatrix<f64>,
+        me: DMatrix<f64>,
+        rf: Vec<f64>,
+        ls: Option<Vec<usize>>,
+        j: Option<Vec<usize>>,
+    ) -> Result<P, String> {
+        let p = Self::checked(mo, ids, pct, r, me, rf, ls, j)?;
+        if p.j.iter().copied().ne(0..p.r.ncols()) {
+            return Err("a full panel must use its own column indices".into());
+        }
+        Ok(p)
+    }
+
+    fn checked(
         mo: Vec<i64>,
         ids: Vec<i64>,
         pct: DMatrix<i64>,
@@ -78,35 +112,43 @@ impl P {
         }
         let ls = ls.unwrap_or(vec![tm; n]);
         let j = j.unwrap_or((0..n).collect());
-        if ls.len() != n || j.len() != n {
+        if ls.len() != n || j.len() != n || ls.iter().any(|&s| s > tm) {
             return Err("panel column metadata disagree in shape".into());
+        }
+        if ids.iter().collect::<std::collections::BTreeSet<_>>().len() != n
+            || j.iter().collect::<std::collections::BTreeSet<_>>().len() != n
+            || me.iter().any(|v| v.is_infinite() || *v < 0.0)
+        {
+            return Err("panel identities must be unique and market values nonnegative or missing".into());
         }
         Ok(P { mo, ids, r, me, rf, pct, pc, ls, j })
     }
 
     /// Observed columns, company labels and delistings through month t only.
-    pub fn upto(&self, t: usize) -> P {
+    pub fn upto(&self, t: usize) -> History {
         assert!(t < self.r.nrows(), "cutoff is outside the panel");
         let k: Vec<usize> = (0..self.r.ncols())
             .filter(|&i| (0..=t).any(|s| self.r[(s, i)].is_finite() || self.me[(s, i)].is_finite()))
             .collect();
         let rows = |m: &DMatrix<f64>| m.rows(0, t + 1).select_columns(&k);
-        P::new(
-            self.mo[..=t].to_vec(),
-            k.iter().map(|&i| self.ids[i]).collect(),
-            self.pct.rows(0, t + 1).select_columns(&k),
-            rows(&self.r),
-            rows(&self.me),
-            self.rf[..=t].to_vec(),
-            Some(k.iter().map(|&i| self.ls[i].min(t + 1)).collect()),
-            Some(k.iter().map(|&i| self.j[i]).collect()),
+        History(
+            P::checked(
+                self.mo[..=t].to_vec(),
+                k.iter().map(|&i| self.ids[i]).collect(),
+                self.pct.rows(0, t + 1).select_columns(&k),
+                rows(&self.r),
+                rows(&self.me),
+                self.rf[..=t].to_vec(),
+                Some(k.iter().map(|&i| self.ls[i].min(t + 1)).collect()),
+                Some(k.iter().map(|&i| self.j[i]).collect()),
+            )
+            .unwrap(),
         )
-        .unwrap()
     }
 
     /// Refuse an incomplete holding horizon.
     pub fn horizon(&self, t: usize, h: usize) -> Result<(), String> {
-        if h < 1 || t + h >= self.r.nrows() {
+        if h < 1 || t.checked_add(h).is_none_or(|s| s >= self.r.nrows()) {
             return Err("holding horizon is outside the panel".into());
         }
         Ok(())
@@ -115,7 +157,11 @@ impl P {
     /// Wealth path over months t+1..t+H of weights w on columns cols, bought at the end of t.
     pub fn hold(&self, t: usize, cols: &[usize], w: &[f64], h: usize) -> Result<Vec<f64>, String> {
         self.horizon(t, h)?;
-        if cols.len() != w.len() || w.iter().any(|x| !x.is_finite()) {
+        if cols.len() != w.len()
+            || w.iter().any(|x| !x.is_finite())
+            || cols.iter().any(|&i| i >= self.r.ncols())
+            || cols.iter().collect::<std::collections::BTreeSet<_>>().len() != cols.len()
+        {
             return Err("holding columns and weights disagree".into());
         }
         if (w.iter().sum::<f64>() - 1.0).abs() > 1e-9 || w.iter().any(|&x| x < -1e-12) {
@@ -200,7 +246,7 @@ pub fn panel(c: &Crsp, rf: &Rf, fill: bool) -> Result<(P, usize), String> {
 
 /// Columns with a market value at the last month of p and >= m returns in its last M months,
 /// not delisted, the nc largest by that market value.
-pub fn elig(p: &P, mw: usize, m: usize, nc: usize) -> Result<Vec<usize>, String> {
+pub fn elig(p: &History, mw: usize, m: usize, nc: usize) -> Result<Vec<usize>, String> {
     if mw.min(m).min(nc) < 1 || m > mw {
         return Err("eligibility needs positive sizes and m <= M".into());
     }
@@ -226,7 +272,7 @@ pub fn b2(u: &[usize]) -> (Vec<usize>, Vec<f64>) {
 }
 
 /// B3: the K largest eligible names, cap-weighted.
-pub fn b3(p: &P, u: &[usize], k: usize) -> (Vec<usize>, Vec<f64>) {
+pub fn b3(p: &History, u: &[usize], k: usize) -> (Vec<usize>, Vec<f64>) {
     let c = u[..k].to_vec();
     let t = p.me.nrows() - 1;
     let v: Vec<f64> = c.iter().map(|&i| p.me[(t, i)]).collect();
@@ -267,7 +313,7 @@ pub struct Q {
 /// Select on p0.upto(t), hold on p0, and retain unavailable or failed dates.
 pub fn run(
     p0: &P,
-    mut sel: impl FnMut(&P, &[usize]) -> Result<Choice, String>,
+    mut sel: impl FnMut(&History, &[usize]) -> Result<Choice, String>,
     dates: impl IntoIterator<Item = usize>,
     mw: usize,
     m: usize,
@@ -300,6 +346,28 @@ pub fn run(
         match sel(&pt, &u) {
             Err(e) => q.reason = Some(e),
             Ok(ch) => {
+                let inconsistent = ch.c.as_ref().is_some_and(|c| {
+                    if ch.w.is_some() {
+                        !matches!(c.st, crate::crt::St::Opt | crate::crt::St::Limit)
+                            || !c.f.is_finite()
+                            || crate::crt::crossed(c.sn, c.f, c.bd, crate::crt::TOL)
+                    } else {
+                        c.f.is_finite() || c.st == crate::crt::St::Opt
+                    }
+                });
+                if inconsistent {
+                    q.reason = Some("selection weights and incumbent certificate disagree".into());
+                    out.push(q);
+                    continue;
+                }
+                if ch.cols.iter().any(|i| !u.contains(i))
+                    || ch.cols.iter().collect::<std::collections::BTreeSet<_>>().len() != ch.cols.len()
+                    || ch.w.as_ref().is_some_and(|w| w.len() != ch.cols.len())
+                {
+                    q.reason = Some("selection must use unique eligible columns with paired weights".into());
+                    out.push(q);
+                    continue;
+                }
                 q.meta = ch.meta;
                 q.c = ch.c;
                 if let Some(c) = &q.c {
@@ -322,6 +390,8 @@ pub fn run(
                             }
                         }
                     }
+                } else {
+                    q.reason = Some("selection has no incumbent weights".into());
                 }
             }
         }
@@ -333,6 +403,40 @@ pub fn run(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+
+    #[test]
+    fn a_full_panel_cannot_remap_selected_asset_identity() {
+        for j in [vec![1, 0, 2], vec![0, 1, 99]] {
+            let p = small();
+            assert!(P::new(p.mo, p.ids, p.pct, p.r, p.me, p.rf, Some(p.ls), Some(j)).is_err());
+        }
+    }
+
+    #[test]
+    fn weights_without_a_certified_incumbent_are_unavailable() {
+        let p = small();
+        let o = run(
+            &p,
+            |_, _| {
+                Ok(Choice {
+                    cols: vec![0],
+                    w: Some(vec![1.0]),
+                    c: Some(C::none(crate::crt::Sense::Min, "no solve")),
+                    meta: Map::new(),
+                })
+            },
+            [0],
+            1,
+            1,
+            3,
+            1,
+        )
+        .unwrap();
+        assert_eq!(o[0].status, "unavailable");
+        assert!(o[0].reason.is_some());
+        assert!(o[0].wp.is_empty());
+        assert!(o[0].cols.is_empty());
+    }
 
     /// Four months, three stocks: stock 1 delists in month 2, stock 2 enters in month 1.
     pub fn small() -> P {
@@ -432,6 +536,27 @@ pub mod tests {
         )
         .unwrap();
         assert_eq!((o[0].status.as_str(), o[0].cols.clone(), o[0].pc.clone()), ("ok", vec![0], vec![1]));
+    }
+
+    #[test]
+    fn invalid_selection_never_indexes_the_panel() {
+        let p = small();
+        for cols in [vec![999], vec![0, 0], vec![2]] {
+            let o = run(
+                &p,
+                |_, _| Ok(Choice { cols: cols.clone(), w: Some(vec![1.0; cols.len()]), c: None, meta: Map::new() }),
+                [0],
+                1,
+                1,
+                3,
+                1,
+            )
+            .unwrap();
+            assert_eq!(o[0].status, "unavailable");
+            assert!(o[0].reason.as_ref().unwrap().contains("unique eligible columns"));
+        }
+        assert!(p.hold(0, &[999], &[1.0], 1).is_err());
+        assert!(p.hold(0, &[0, 0], &[0.5, 0.5], 1).is_err());
     }
 
     #[test]

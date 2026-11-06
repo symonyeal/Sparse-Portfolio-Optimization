@@ -86,6 +86,7 @@ pub fn f1(
     gp: f64,
 ) -> Result<Sol, String> {
     ms(mu, s)?;
+    x.dimension(mu.len())?;
     limits(tl, gp)?;
     if !(0.0..=1.0).contains(&lam) {
         return Err("lam must lie in [0, 1]".into());
@@ -94,12 +95,12 @@ pub fn f1(
     let sg = scale(s);
     let ss = s * sg;
     let mut lp = Lp::default();
-    x.set(&mut lp);
+    let cols = x.set(&mut lp);
     for i in 0..n {
-        lp.c[i] = -(1.0 - lam) * sg * mu[i];
+        lp.c[cols.w.start + i] = -(1.0 - lam) * sg * mu[i];
     }
     if let Some((r, eq)) = rho {
-        ret(&mut lp, mu, r, eq)?;
+        ret(&mut lp, &cols, mu, r, eq)?;
     }
     let v = lp.col(lam, 0.0, f64::INFINITY, false);
     let t0 = lp.c.len();
@@ -109,13 +110,13 @@ pub fn f1(
         }
     }
     let mut sp = scip::open(&lp, Sense::Min, FT, gp)?;
-    let w = &sp.v[..n];
+    let w = &sp.v[cols.w.clone()];
     let e = if p {
         let (q, pi) = split(&ss);
         let t = &sp.v[t0..t0 + n];
         for i in 0..n {
             let wi = Expr::var(&w[i]);
-            let c = wi.clone() * wi - Expr::var(&t[i]) * Expr::var(&sp.v[n + i]);
+            let c = wi.clone() * wi - Expr::var(&t[i]) * Expr::var(&sp.v[cols.z.start + i]);
             sp.m.add(cons().expression(c).le(0.0));
         }
         qx(&q, w) + Expr::sum((0..n).map(|i| pi[i] * Expr::var(&t[i])))
@@ -125,7 +126,7 @@ pub fn f1(
     let e = e - Expr::var(&sp.v[v]);
     sp.m.add(cons().expression(e).le(0.0));
     let (xv, c) = scip::solve(sp, Sense::Min, tl)?;
-    Ok(Sol::of(xv, n, c.un(sg), |w| obj(w, mu, s, lam)))
+    Ok(Sol::of(xv, cols, c.un(sg), |w| obj(w, mu, s, lam)))
 }
 
 /// Minimum-variance point at mean r, with its certificate.

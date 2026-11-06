@@ -24,13 +24,14 @@ use nalgebra::DMatrix;
 /// Solve F2; f is the deviation recomputed from the returns.
 pub fn mad(r: &DMatrix<f64>, x: Xk, rho: Option<f64>, tl: Option<f64>, gp: f64) -> Result<Sol, String> {
     rr(r)?;
+    x.dimension(r.ncols())?;
     let (s, n) = r.shape();
     let (mu, _) = mom(r);
     let a = centre(r, &mu);
     let mut p = Lp::default();
-    x.set(&mut p);
+    let cols = x.set(&mut p);
     if let Some(rho) = rho {
-        ret(&mut p, &mu, rho, false)?;
+        ret(&mut p, &cols, &mu, rho, false)?;
     }
     let d0 = p.c.len();
     for _ in 0..s {
@@ -38,13 +39,13 @@ pub fn mad(r: &DMatrix<f64>, x: Xk, rho: Option<f64>, tl: Option<f64>, gp: f64) 
     }
     for sg in [1.0, -1.0] {
         for k in 0..s {
-            let mut row: Vec<_> = (0..n).map(|i| (i, sg * a[(k, i)])).collect();
+            let mut row: Vec<_> = (0..n).map(|i| (cols.w.start + i, sg * a[(k, i)])).collect();
             row.push((d0 + k, 1.0));
             p.row(row, 0.0, f64::INFINITY);
         }
     }
     let (xv, c) = p.solve(tl, gp)?;
-    Ok(Sol::of(xv, n, c, |w| dev(r, w)))
+    Ok(Sol::of(xv, cols, c, |w| dev(r, w)))
 }
 
 /// (1/S) sum_s |(r_s - mu)'w|, recomputed from the returns at w.

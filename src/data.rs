@@ -14,6 +14,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 // Legend
 // N, T   : assets; time periods (indtrack: levels at t = 0..T)
@@ -26,9 +27,17 @@ use std::path::{Path, PathBuf};
 
 pub const FF: &str = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_CSV.zip";
 
-/// The repository root: data and results are read and written relative to it.
+static ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set the immutable runtime resource root before starting workers.
+pub fn set_root(p: &Path) -> Result<(), String> {
+    let p = p.canonicalize().map_err(|e| format!("{}: {e}", p.display()))?;
+    ROOT.set(p).map_err(|_| "runtime root already configured".to_string())
+}
+
+/// Runtime resource root, defaulting to the working directory rather than the build checkout.
 pub fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    ROOT.get().cloned().unwrap_or_else(|| std::env::current_dir().expect("working directory unavailable"))
 }
 
 pub fn orlib_dir() -> PathBuf {
@@ -238,16 +247,25 @@ pub fn indtrack(k: usize, path: Option<&Path>, tail: bool) -> Result<Indtrack, S
 /// Fetch the French factors zip with the system curl (Schannel on Windows); returns its SHA.
 pub fn fetch(dst: &Path) -> Result<String, String> {
     std::fs::create_dir_all(dst.parent().unwrap()).map_err(|e| e.to_string())?;
+    let _lease = crate::bd::lease(dst)?;
+    let pending = dst.with_extension("pending.zip");
     let mut c = std::process::Command::new("curl");
     c.arg("-sSLf");
     if cfg!(windows) {
         c.arg("--ssl-no-revoke");
     }
-    let st = c.args(["--max-time", "120", "-o"]).arg(dst).arg(FF).status().map_err(|e| format!("curl: {e}"))?;
+    let st = c.args(["--max-time", "120", "-o"]).arg(&pending).arg(FF).status().map_err(|e| format!("curl: {e}"))?;
     if !st.success() {
         return Err(format!("curl failed: {st}"));
     }
-    sha256(dst)
+    accept_rf(&pending, dst)
+}
+
+/// Admit the complete downloaded monthly block before replacing any accepted input.
+fn accept_rf(pending: &Path, dst: &Path) -> Result<String, String> {
+    let r = rf(pending)?;
+    std::fs::rename(pending, dst).map_err(|e| format!("{}: {e}", dst.display()))?;
+    Ok(r.sha)
 }
 
 pub struct Rf {
@@ -572,5 +590,14 @@ mod tests {
         assert!(rf(&tmp("rf4.csv", "no header\n")).is_err());
         assert!(rf(&tmp("rf5.csv", ",Mkt-RF,SMB,HML,RF\n199013, 1, 2, 3, 0.5\n")).is_err());
         assert_eq!(mseq(199011, 199102), [199011, 199012, 199101, 199102]);
+    }
+
+    #[test]
+    fn failed_rf_acceptance_preserves_the_previous_input() {
+        let old = tmp("accepted-rf.csv", "accepted bytes");
+        let pending = tmp("pending-rf.csv", "partial HTTP response");
+        assert!(accept_rf(&pending, &old).is_err());
+        assert_eq!(std::fs::read_to_string(old).unwrap(), "accepted bytes");
+        assert!(pending.exists());
     }
 }
