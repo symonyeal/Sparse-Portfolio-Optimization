@@ -14,9 +14,17 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
+      - name: Committed benchmark bundles are admitted
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo run --locked -- bench
+          ! grep -q "No current benchmark bundles" docs/results/README.md
+          git diff --exit-code docs/results/README.md
