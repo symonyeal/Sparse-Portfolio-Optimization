@@ -58,7 +58,9 @@ its achieved gap. [Open issues](docs/ISSUES.md) identifies unavailable empirical
 
 One Rust crate, `pf`, with HiGHS and SCIP as its solvers. No commercial solver is required.
 Building HiGHS needs CMake and a C++ compiler; SCIP's bindings need libclang. The build
-downloads SCIP's prebuilt library.
+downloads SCIP's prebuilt library. On Windows, CMake and libclang must be on the path (or
+`CMAKE` and `LIBCLANG_PATH` set), and `CARGO_TARGET_DIR` must be a short path such as `C:\t\pf`,
+because highs-sys fails at 260 characters.
 
 ```text
 cargo test --locked

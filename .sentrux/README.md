@@ -5,7 +5,7 @@ depend on orchestration modules. Its layer convention uses the larger order for 
 One existing component joins `bd`, `data`, `bench` and `oos`, including test imports; the baseline
 retains it. A green structural result does not establish numerical correctness.
 
-Use the shared local runner at `Claude Func Folder/sentrux/scan.py`:
+Use the shared local runner (`sentrux/scan.py` in the machine's shared tools folder):
 
 ```text
 python "<shared runner>" "<repository>" "<new run label>"

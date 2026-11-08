@@ -31,8 +31,7 @@ or two dates, all of them solves stopped by the 20 s limit, and its wealth then 
 up to 6.2%. F5 is therefore not pinned out of sample.
 
 Gates on this revision: `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D
-warnings` pass; `cargo test --locked` runs 52 tests and all pass (43 unit, 8 model, 1
-out-of-sample).
+warnings` pass; `cargo test --locked` runs 69 tests and all pass.
 
 ## Formulation
 

@@ -311,7 +311,11 @@ pub fn rf(p: &Path) -> Result<Rf, String> {
             return Err(format!("{d}: invalid calendar month"));
         }
         mo.push(m);
-        v.push(num(c[4], &d.to_string(), "RF")? / 100.0);
+        let r = num(c[4], &d.to_string(), "RF")?;
+        if r == -99.99 || r == -999.0 {
+            return Err(format!("{d}: missing-value marker in RF"));
+        }
+        v.push(r / 100.0);
     }
     if mo.is_empty() {
         return Err(format!("{d}: empty monthly block"));
@@ -588,6 +592,7 @@ mod tests {
         assert!(rf(&tmp("rf2.csv", ",Mkt-RF,SMB,HML,RF\n199001, 1, 2, 3, 0.5\n199003, 1, 2, 3, 0.5\n")).is_err());
         assert!(rf(&tmp("rf3.csv", ",Mkt-RF,SMB,HML,RF\n\n")).is_err());
         assert!(rf(&tmp("rf4.csv", "no header\n")).is_err());
+        assert!(rf(&tmp("rf6.csv", ",Mkt-RF,SMB,HML,RF\n199001, 1, 2, 3, -99.99\n")).is_err());
         assert!(rf(&tmp("rf5.csv", ",Mkt-RF,SMB,HML,RF\n199013, 1, 2, 3, 0.5\n")).is_err());
         assert_eq!(mseq(199011, 199102), [199011, 199012, 199101, 199102]);
     }
