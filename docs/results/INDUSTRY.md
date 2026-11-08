@@ -8,17 +8,19 @@ vintage ZIP has SHA-256
 allocations and certificates, validation histories and monthly paths.
 
 All four methods have the same 1,071 test months, July 1937–September 2026. Of 2,166
-candidate solves, 2,163 were reported optimal by HiGHS and three retained feasible time-limit incumbents
-(relative gaps 0.081%, 2.132%, 2.517%). The solver stopped at its default absolute gap of 1e-6
-on 161 of the 2,163, with gaps up to 5.4e-5 (every primal-bound difference below 1e-6); this
-file predates the stricter tolerance now set in `src/lp.rs`. No dates were dropped. Adaptive selection chose
-60 months on 604 dates and 120 months on 467 dates.
+candidate solves, 1,978 were reported optimal by HiGHS and 188 retained feasible time-limit
+incumbents (relative gaps up to 6.9%, median 0.64%, 69 above 1%). The optimal solves now stop at
+a gap of at most 2.2e-9 under the stricter tolerance in `src/lp.rs`; the earlier run, with the
+default absolute gap of 1e-6, reported 2,163 optimal and 3 at the limit. The 0.5-second limit
+binds more often in this run; the stricter tolerance and load from concurrent builds on the
+machine were not separated, and the count was not measured on an idle machine. No dates were dropped.
+Adaptive selection chose 60 months on 608 dates and 120 months on 463 dates.
 
 | Method | Annualized volatility | Maximum drawdown | Mean monthly one-way turnover | Terminal gross wealth, initial 1 |
 | --- | ---: | ---: | ---: | ---: |
-| Fixed 60 months | 12.27% | 41.92% | 8.48% | 3,645.68 |
-| Fixed 120 months | 12.25% | 39.76% | 4.97% | 4,670.29 |
-| Adaptive | 12.08% | 37.56% | 7.97% | 4,317.56 |
+| Fixed 60 months | 12.27% | 41.92% | 8.48% | 3,595.38 |
+| Fixed 120 months | 12.26% | 39.76% | 5.05% | 4,545.98 |
+| Adaptive | 12.11% | 37.56% | 7.88% | 4,399.78 |
 | Equal 12 industries | 15.23% | 49.55% | 1.08% | 14,561.83 |
 
 Adaptive selection reduced sample volatility and drawdown relative to both fixed
@@ -29,10 +31,9 @@ This comparison does not establish statistical superiority or investment suitabi
 
 An independent computation from the original ZIP reconciled all dates, unchanged
 weights, budget/cardinality constraints, training MAD objectives and objective bounds,
-realized returns, prior-only adaptive scores, drifted turnover and summary statistics.
-The calculation checks the retained feasible points; it does not independently prove
-the solver's global bounds. The 68 repository tests, formatting and warning-denied
-Clippy checks also passed on Windows.
+realized returns, prior-only adaptive scores, drifted turnover and summary statistics
+for the earlier run; it has not been repeated on this one. The calculation checks the
+retained feasible points; it does not independently prove the solver's global bounds.
 
 Returns use changing-membership research portfolios from one revised vintage, with no
 trading costs, fees or taxes. They are not point-in-time tradable funds. Time limits can
