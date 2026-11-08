@@ -6,7 +6,9 @@
 //! (2009) for the rolling estimation window M.
 //!
 //! Holding: buy-and-hold for H months. After a recorded delisting month (whose return includes
-//! DLRET), proceeds earn the T-bill rate. Other missing holding returns are refused.
+//! DLRET), proceeds earn the T-bill rate. A missing return in the delisting month itself is an
+//! unknown terminal value and is read as a total loss, so the date stays in the comparison sample
+//! whatever the delisting turns out to be. Other missing holding returns are refused.
 
 use crate::crt::C;
 use crate::data::{Crsp, Rf, nx};
@@ -182,6 +184,9 @@ impl P {
                 } else if s > self.ls[c] {
                     // left the panel after its delisting month
                     cash += v[k] * (1.0 + self.rf[s]);
+                    v[k] = 0.0;
+                } else if s == self.ls[c] {
+                    // delisting month with RET and DLRET both missing: total loss
                     v[k] = 0.0;
                 } else {
                     return Err("missing return while still listed or without a confirmed delisting".into());
@@ -464,6 +469,15 @@ pub mod tests {
         let w = p.hold(0, &[0, 1], &[0.5, 0.5], 2).unwrap();
         assert!((w[0] - (0.5 * 1.02 + 0.5 * 0.5)).abs() < 1e-15);
         assert!((w[1] - (0.5 * 1.02 * 1.01 + 0.25 * 1.01)).abs() < 1e-15);
+    }
+
+    #[test]
+    fn missing_return_in_the_delisting_month_is_a_total_loss() {
+        let mut p = small();
+        p.r[(1, 1)] = f64::NAN;
+        let w = p.hold(0, &[0, 1], &[0.5, 0.5], 2).unwrap();
+        assert!((w[0] - 0.5 * 1.02).abs() < 1e-15);
+        assert!((w[1] - 0.5 * 1.02 * 1.01).abs() < 1e-15);
     }
 
     #[test]

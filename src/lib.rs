@@ -13,6 +13,7 @@ pub mod cv;
 pub mod data;
 pub mod est;
 pub mod ev;
+pub mod eval;
 pub mod it;
 pub mod learn;
 pub mod lp;

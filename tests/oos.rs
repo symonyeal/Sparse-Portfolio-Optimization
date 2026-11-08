@@ -45,3 +45,24 @@ fn strategies_reproduce_the_pinned_paths() {
         }
     }
 }
+
+#[test]
+fn eval_counts_the_underperformance_shares_on_the_fixture() {
+    let rows = data::crsp(&at("panel.csv"), &[10, 11, 12]).unwrap();
+    let rf = data::rf(&at("rf.csv")).unwrap();
+    let (p0, nf) = panel::panel(&rows, &rf, false).unwrap();
+    let c = oos::Run { k: 3, mw: 12, m: 6, nc: 8, h: 6, fill: false, tl: 20.0, seed: 0 };
+    let r = oos::record("b3", &p0, &c, nf).unwrap();
+    let m = pf::eval::summary(&r).unwrap();
+    let f = |k: &str| -> Vec<Option<f64>> { r[k].as_array().unwrap().iter().map(Value::as_f64).collect() };
+    let (w, b1, b5) = (f("W"), f("B1"), f("B5"));
+    let by = |b: &Vec<Option<f64>>| {
+        let p: Vec<(f64, f64)> = w.iter().zip(b).filter_map(|(a, b)| a.zip(*b)).collect();
+        (p.iter().filter(|(a, b)| a < b).count() as f64 / p.len() as f64, p.len())
+    };
+    assert_eq!(m.n, w.len());
+    assert_eq!(m.na, w.iter().filter(|x| x.is_none()).count());
+    assert_eq!(m.u1, Some(by(&b1)));
+    assert_eq!(m.u5, Some(by(&b5)));
+    assert!(m.n > 0 && m.u1.unwrap().1 > 0);
+}

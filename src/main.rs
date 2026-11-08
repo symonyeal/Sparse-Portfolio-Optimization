@@ -5,6 +5,8 @@
 //! pf oos --crsp PATH [--rf PATH] [--only S]... [--K 10] [--M 120] [--m 120] [--Nc 200]
 //!        [--H 120] [--fill] [--time 60] [--seed 0] [--missing]
 //! pf boot --crsp PATH [--rf PATH] [--n 20000] [--sizes 1 5 25 50 100] [--seed 0] [--missing]
+//! pf eval --crsp PATH [--rf PATH] [--only S]... [--K 10] [--M 120] [--m 120] [--Nc 200] [--H 120] [--fill]
+//!        [--time 60] [--seed 0]
 //! pf fetch
 //! ```
 //!
@@ -12,7 +14,7 @@
 //! refuses to write bundles from a dirty tree or from a binary older than its sources. `oos` and
 //! `boot` need the licensed CRSP extract (docs/DATA.md); without one, P5 and P6 stay blocked.
 
-use pf::{bd, bench, boot, data, learn, oos};
+use pf::{bd, bench, boot, data, eval, learn, oos};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -139,12 +141,25 @@ fn rf(a: &Args) -> PathBuf {
     a.path("rf").unwrap_or_else(data::ff_path)
 }
 
+fn run_of(a: &Args) -> Result<oos::Run, String> {
+    Ok(oos::Run {
+        k: a.get("K", 10)?,
+        mw: a.get("M", 120)?,
+        m: a.get("m", 120)?,
+        nc: a.get("Nc", 200)?,
+        h: a.get("H", 120)?,
+        fill: a.has("fill"),
+        tl: a.get("time", 60.0)?,
+        seed: a.get("seed", 0)?,
+    })
+}
+
 fn configure(a: &Args) -> Result<(), String> {
     data::set_root(&a.path("root").unwrap_or_else(data::root))
 }
 
 fn run(argv: &[String]) -> Result<(), String> {
-    let (c, rest) = argv.split_first().ok_or("usage: pf bench|oos|boot|fetch [options]; see src/main.rs")?;
+    let (c, rest) = argv.split_first().ok_or("usage: pf bench|oos|eval|boot|fetch [options]; see src/main.rs")?;
     let cmd: Vec<String> = std::iter::once("pf".to_string()).chain(argv.iter().cloned()).collect();
     match c.as_str() {
         "bench" => {
@@ -161,20 +176,19 @@ fn run(argv: &[String]) -> Result<(), String> {
             )?;
             configure(&a)?;
             let crsp = a.path("crsp").ok_or("no CRSP extract supplied (--crsp): P6 is blocked; see docs/PLAN.md")?;
-            let r = oos::Run {
-                k: a.get("K", 10)?,
-                mw: a.get("M", 120)?,
-                m: a.get("m", 120)?,
-                nc: a.get("Nc", 200)?,
-                h: a.get("H", 120)?,
-                fill: a.has("fill"),
-                tl: a.get("time", 60.0)?,
-                seed: a.get("seed", 0)?,
-            };
+            let r = run_of(&a)?;
             let out = oos::out();
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
             let _lease = bd::lease(&out)?;
             oos::main(&crsp, &rf(&a), &a.all("only"), &r, a.has("missing"), &out, &clean()?, &cmd)
+        }
+        "eval" => {
+            let a =
+                Args::parse(rest, &["fill"], &[], &["crsp", "rf", "only", "K", "M", "m", "Nc", "H", "time", "seed"])?;
+            configure(&a)?;
+            let crsp = a.path("crsp").ok_or("eval needs --crsp PATH; the synthetic fixture is tests/data/panel.csv")?;
+            let r = run_of(&a)?;
+            eval::main(&crsp, &rf(&a), &a.all("only"), &r)
         }
         "boot" => {
             let a = Args::parse(rest, &["missing"], &["sizes"], &["crsp", "rf", "n", "seed"])?;
@@ -219,7 +233,7 @@ fn run(argv: &[String]) -> Result<(), String> {
             clean()?;
             learn::main(&input, &out)
         }
-        _ => Err(format!("unknown command {c:?}; use bench, oos, boot, fetch or learn")),
+        _ => Err(format!("unknown command {c:?}; use bench, oos, eval, boot, fetch or learn")),
     }
 }
 

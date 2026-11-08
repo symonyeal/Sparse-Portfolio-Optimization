@@ -48,7 +48,7 @@ fixtures name the property tested and carry no empirical interpretation.
 | Fetch the French factors file at run time; record its hash and its "created using the YYYYMM CRSP database" line. | The file carries a copyright notice and is revised between vintages. |
 | Combine RET and DLRET; never read a missing value as zero. | Bessembinder includes delisting returns; a zero would be an invented return. |
 | G3 replication without the Shumway fill; RQ2–RQ4 with it, and without it as a sensitivity. | Bessembinder used CRSP's delisting returns as supplied; the specification asks for the fill. |
-| Refuse a missing return while a stock is listed. | The holding's value is then unknown. |
+| Refuse a missing return while a stock is listed; read one in the delisting month itself as a total loss. | A listed holding's value is unknown. Dropping the date on an unknown terminal return would remove it selectively from larger portfolios (docs/PLAN.md: no selective disappearance). |
 | Selection receives `P::upto(t)`, a copy cut at $t$. | No-look-ahead holds by construction and is tested by perturbing later returns. |
 | Estimate moments on common observed rows in the $M$-month window, requiring at least $m$. | No return is imputed; record scenario counts and unavailable selections. Freeze the estimator before P6. |
 | Bessembinder's monthly-redraw bootstrap and the specification's buy-and-hold B4 kept apart. | The source redraws monthly and value-weights; B4 is an extension and is labelled so. |

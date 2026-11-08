@@ -43,4 +43,5 @@ for July's beginning values. T-bill coverage is required for the evaluated month
 | both present | $R = (1+\text{RET})(1+\text{DLRET}) - 1$ |
 | DLRET missing after a performance delisting, `--fill` | $-0.30$ NYSE/AMEX (codes 500, 520–584), $-0.55$ Nasdaq (500, 505–588) |
 | return missing during a holding, with no recorded delisting | refused, including an unexplained end of the series |
+| RET and DLRET both missing in the delisting month | total loss of the position; the date stays in the sample |
 | return missing after a recorded delisting month | proceeds held at the T-bill rate |

@@ -89,7 +89,9 @@ risk-free file; CRSP data must remain outside the repository. [Data](docs/DATA.m
 the accepted schema and delisting treatment.
 
 `pf boot --crsp PATH` runs the Bessembinder replication; `pf oos --crsp PATH` runs the
-empirical comparisons. Both require the licensed extract and follow the
+empirical comparisons; `pf eval --crsp PATH` prints the primary estimands (share of start dates
+below B1 and below B5, with unavailable dates counted) and runs on the synthetic fixture
+(`tests/data/panel.csv`, `tests/data/rf.csv`). `boot` and `oos` require the licensed extract and follow the
 [pre-registration](docs/PLAN.md). Synthetic fixtures test arithmetic, selection timing and
 numerical properties only.
 
