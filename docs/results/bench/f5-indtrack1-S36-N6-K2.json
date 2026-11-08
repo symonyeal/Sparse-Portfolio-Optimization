@@ -3,9 +3,9 @@
   "S": 36,
   "bundle": {
     "code": {
-      "commit": "e5bc8fa6a6a410317502562500354c5970e1db96",
+      "commit": "cf4f109d8ba1d3ab29ea13291a22ee6e2f784b71",
       "dirty": false,
-      "source": "d4cd1b8ac089ae63f770c56a446ec91f225dfccb771739f9afae3e1cae036528"
+      "source": "1a343bc266e1a0ca3dbbdfffd0ee984909df2bd7e67c99adc8a00582850c78f3"
     },
     "command": [
       "pf",
@@ -24,9 +24,7 @@
       "--only",
       "f5-indtrack1-S36-N6-K2",
       "--time",
-      "60",
-      "--jobs",
-      "1"
+      "60"
     ],
     "host": {
       "arch": "x86_64",
@@ -48,7 +46,8 @@
       "k": 1,
       "tl": 60.0
     },
-    "schema": 2
+    "payload": "a3138cb02e64c9e460e14b654b0c43e8624f173e169a59f72b5a4a3d0ab7d85c",
+    "schema": 3
   },
   "c": {
     "bd": 0.012602516085099049,
@@ -64,8 +63,8 @@
     "sg": 560.6462814948861,
     "sn": "max",
     "st": "opt",
-    "t": 0.1177587
+    "t": 0.1417668
   },
   "f": 0.012602516084074018,
-  "wall": 0.1282275
+  "wall": 0.1523977
 }

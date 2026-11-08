@@ -1,9 +1,9 @@
 {
   "bundle": {
     "code": {
-      "commit": "e5bc8fa6a6a410317502562500354c5970e1db96",
+      "commit": "cf4f109d8ba1d3ab29ea13291a22ee6e2f784b71",
       "dirty": false,
-      "source": "d4cd1b8ac089ae63f770c56a446ec91f225dfccb771739f9afae3e1cae036528"
+      "source": "1a343bc266e1a0ca3dbbdfffd0ee984909df2bd7e67c99adc8a00582850c78f3"
     },
     "command": [
       "pf",
@@ -22,9 +22,7 @@
       "--only",
       "f5-indtrack1-S36-N6-K2",
       "--time",
-      "60",
-      "--jobs",
-      "1"
+      "60"
     ],
     "host": {
       "arch": "x86_64",
@@ -44,26 +42,27 @@
       "k": 1,
       "tl": 60.0
     },
-    "schema": 2
+    "payload": "23f9bb05f2194cacbb6158ab0cddf785f0a8bf7205d9dc78b2b6d3677c911c80",
+    "schema": 3
   },
   "c": {
-    "bd": 0.05197795020090417,
+    "bd": 0.05197795020090421,
     "bs": "mip_dual_bound",
-    "f": 0.05197795020090417,
+    "f": 0.05197795020090421,
     "first": null,
     "g": 0.0,
     "msg": "Optimal",
-    "nd": 1,
+    "nd": 9,
     "ps": true,
     "rg": 0.0,
     "rt": null,
     "sg": 1.0,
     "sn": "min",
     "st": "opt",
-    "t": 0.3013374
+    "t": 0.5038418
   },
-  "diff": 4.163336342344337e-17,
+  "diff": 2.0816681711721685e-17,
   "ok": true,
-  "recomputed": 0.05197795020090413,
-  "wall": 0.3049956
+  "recomputed": 0.05197795020090423,
+  "wall": 0.5076026
 }
