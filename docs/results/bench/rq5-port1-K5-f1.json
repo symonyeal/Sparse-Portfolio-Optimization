@@ -2,9 +2,9 @@
   "N": 31,
   "bundle": {
     "code": {
-      "commit": "cf4f109d8ba1d3ab29ea13291a22ee6e2f784b71",
+      "commit": "935e3d25a1098b8114c328e75be3ce37751a8642",
       "dirty": false,
-      "source": "1a343bc266e1a0ca3dbbdfffd0ee984909df2bd7e67c99adc8a00582850c78f3"
+      "source": "ff54c75ea1569b8c3b3ed1d3105e356ee539b9002e642016c9e9ddea77fe4ec4"
     },
     "command": [
       "pf",
@@ -45,7 +45,7 @@
       "p": false,
       "tl": 60.0
     },
-    "payload": "ea0a01a51d6a4aac6a68fbd976d643b13a7d6ede4311a67053b8cdb0511a5c9c",
+    "payload": "e10dbf91fda85f7646798aefbdf267a64380905b04e0f61ca8641e1321e8c198",
     "schema": 3
   },
   "c": {
@@ -62,8 +62,8 @@
     "sg": 466.82456835016205,
     "sn": "min",
     "st": "opt",
-    "t": 1.3584625
+    "t": 0.9527756
   },
   "f": -0.0033497791610560147,
-  "wall": 1.4342289
+  "wall": 1.019634
 }

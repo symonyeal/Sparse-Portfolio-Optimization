@@ -6,9 +6,9 @@
   "b_out": 0.9215912430837859,
   "bundle": {
     "code": {
-      "commit": "cf4f109d8ba1d3ab29ea13291a22ee6e2f784b71",
+      "commit": "935e3d25a1098b8114c328e75be3ce37751a8642",
       "dirty": false,
-      "source": "1a343bc266e1a0ca3dbbdfffd0ee984909df2bd7e67c99adc8a00582850c78f3"
+      "source": "ff54c75ea1569b8c3b3ed1d3105e356ee539b9002e642016c9e9ddea77fe4ec4"
     },
     "command": [
       "pf",
@@ -46,7 +46,7 @@
       "k": 1,
       "tl": 60.0
     },
-    "payload": "f3002f4046e7bd5be33231000ad7acdde2e2e927f86e3a9c0128d665970e3a1d",
+    "payload": "8b4c1b361d2333992cb752c68a2134de7458ec30adc9a29c9310ed4b05379ab7",
     "schema": 3
   },
   "c1": {
@@ -63,7 +63,7 @@
     "sg": 1.0,
     "sn": "min",
     "st": "opt",
-    "t": 0.0214782
+    "t": 0.0354268
   },
   "c2": {
     "bd": 0.0,
@@ -79,11 +79,11 @@
     "sg": 1.0,
     "sn": "min",
     "st": "opt",
-    "t": 0.014251
+    "t": 0.0350559
   },
   "drop": 0,
   "names": 10,
   "te_in": 0.01968532216884836,
   "te_out": 0.013759969249331903,
-  "wall": 0.0404358
+  "wall": 0.0812629
 }

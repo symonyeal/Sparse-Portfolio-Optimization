@@ -1,9 +1,9 @@
 {
   "bundle": {
     "code": {
-      "commit": "cf4f109d8ba1d3ab29ea13291a22ee6e2f784b71",
+      "commit": "935e3d25a1098b8114c328e75be3ce37751a8642",
       "dirty": false,
-      "source": "1a343bc266e1a0ca3dbbdfffd0ee984909df2bd7e67c99adc8a00582850c78f3"
+      "source": "ff54c75ea1569b8c3b3ed1d3105e356ee539b9002e642016c9e9ddea77fe4ec4"
     },
     "command": [
       "pf",
@@ -41,7 +41,7 @@
       "k": 1,
       "tl": 60.0
     },
-    "payload": "5d4c01b10344120c62f4052d229a109d43980fbb4ae4650c7bd8142d5ab01105",
+    "payload": "3692d8486e961d1ea8d8f9dfc12f1650c7d3887b6c7c15517b69d4c2919e4f02",
     "schema": 3
   },
   "half_unit": 0.7645,
@@ -54,5 +54,5 @@
   "n": 2000,
   "pass": false,
   "rectangles": 1858,
-  "wall": 0.1646861
+  "wall": 0.0809987
 }
