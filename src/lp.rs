@@ -3,7 +3,7 @@
 //! A reported infeasibility is read back from a second solve with presolve off: HiGHS presolve
 //! declared feasible programs infeasible in Electricity-Clearing-and-Pricing.
 
-use crate::crt::{C, Sense as Obj, St, TOL, limits};
+use crate::crt::{C, Sense as Obj, St, TOL, gap, limits};
 use highs::{HighsModelStatus, HighsSolutionStatus, RowProblem, Sense};
 use std::time::Instant;
 
@@ -80,6 +80,10 @@ impl Lp {
         let mut m = p.try_optimise(Sense::Minimise).map_err(|e| format!("HiGHS model: {e:?}"))?;
         m.make_quiet();
         m.set_option("mip_rel_gap", gp);
+        // HiGHS also stops at mip_abs_gap and floors its gap tolerance at mip_feasibility_tolerance;
+        // both defaults (1e-6) end solves at small objective scales with a gap of 10 % or more.
+        m.set_option("mip_abs_gap", 0.0);
+        m.set_option("mip_feasibility_tolerance", 1e-9);
         m.set_option("presolve", if ps { "on" } else { "off" });
         if let Some(l) = tl {
             m.set_option("time_limit", l);
@@ -88,7 +92,14 @@ impl Lp {
         let s = m.try_solve().map_err(|e| format!("HiGHS solve: {e:?}"))?;
         let t = t0.elapsed().as_secs_f64();
         let ms = s.status();
+        let has = s.primal_solution_status() == HighsSolutionStatus::Feasible;
+        let x = has.then(|| s.get_solution().columns().to_vec());
+        let f = has.then(|| s.objective_value());
+        // HiGHS reports a missing bound as an infinite value.
+        let bd = s.double_info_value(c"mip_dual_bound").ok().filter(|b| b.abs() < 1e20);
         let st = match ms {
+            // `Optimal` is trusted only when the read-back gap is within the request.
+            HighsModelStatus::Optimal if f.zip(bd).is_some_and(|(f, b)| gap(f, b) > gp + TOL) => St::Limit,
             HighsModelStatus::Optimal => St::Opt,
             HighsModelStatus::ReachedTimeLimit
             | HighsModelStatus::ReachedIterationLimit
@@ -99,11 +110,6 @@ impl Lp {
             HighsModelStatus::Unbounded => St::Unbounded,
             _ => St::Numerical,
         };
-        let has = s.primal_solution_status() == HighsSolutionStatus::Feasible;
-        let x = has.then(|| s.get_solution().columns().to_vec());
-        let f = has.then(|| s.objective_value());
-        // HiGHS reports a missing bound as an infinite value.
-        let bd = s.double_info_value(c"mip_dual_bound").ok().filter(|b| b.abs() < 1e20);
         let mut c = C::new(st, Obj::Min, f, bd, t, TOL)?;
         let mut nd = -1i64;
         // SAFETY: the pointer is the live solved model; the key is NUL-terminated. The highs
@@ -141,6 +147,29 @@ mod tests {
         assert_eq!(c.f, -9.0);
         assert!((c.bd - c.f).abs() < 1e-9 && c.bs == "mip_dual_bound");
         assert_eq!(x.unwrap().iter().map(|v| v.round()).collect::<Vec<_>>(), [1.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn small_objective_scale_is_solved_to_the_requested_gap() {
+        // 40 binaries, 5 knapsack rows, objective scale 5e-7: default HiGHS stops at f = -9.44e-6
+        // with a gap of 9.6 %; the optimum is -1.012117667217e-5.
+        let mut s = 12345u64;
+        let mut u = || {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((s >> 33) as f64) / (1u64 << 31) as f64
+        };
+        let mut p = Lp::default();
+        for _ in 0..40 {
+            p.col(-(1.0 + u()) * 5e-7, 0.0, 1.0, true);
+        }
+        for _ in 0..5 {
+            let r: Row = (0..40).map(|j| (j, 1.0 + (u() * 20.0).floor())).collect();
+            let h = r.iter().map(|t| t.1).sum::<f64>() / 4.0;
+            p.row(r, f64::NEG_INFINITY, h);
+        }
+        let (_, c) = p.solve(None, 0.0).unwrap();
+        assert!(c.st == St::Limit || (c.st == St::Opt && c.g <= TOL));
+        assert!(c.st == St::Limit || (c.f + 1.012117667217e-5).abs() < 1e-12);
     }
 
     #[test]

@@ -8,8 +8,10 @@ vintage ZIP has SHA-256
 allocations and certificates, validation histories and monthly paths.
 
 All four methods have the same 1,071 test months, July 1937–September 2026. Of 2,166
-candidate solves, 2,163 were optimal and three retained feasible time-limit incumbents
-(relative gaps 0.081%, 2.132%, 2.517%). No dates were dropped. Adaptive selection chose
+candidate solves, 2,163 were reported optimal by HiGHS and three retained feasible time-limit incumbents
+(relative gaps 0.081%, 2.132%, 2.517%). The solver stopped at its default absolute gap of 1e-6
+on 161 of the 2,163, with gaps up to 5.4e-5 (every primal-bound difference below 1e-6); this
+file predates the stricter tolerance now set in `src/lp.rs`. No dates were dropped. Adaptive selection chose
 60 months on 604 dates and 120 months on 467 dates.
 
 | Method | Annualized volatility | Maximum drawdown | Mean monthly one-way turnover | Terminal gross wealth, initial 1 |

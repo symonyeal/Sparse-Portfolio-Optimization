@@ -158,7 +158,8 @@ fn allocation(raw: &[f64], z: &[f64], x: Xk, mu: &[f64], rho: Option<f64>) -> Re
     if !x.ok(raw, z, 1e-7).is_empty() {
         return Err("raw allocation violates X(K)".into());
     }
-    let mut w: Vec<f64> = raw.iter().map(|v| v.max(0.0)).collect();
+    // Weights within the tolerance of zero on unselected names are solver dust, not holdings.
+    let mut w: Vec<f64> = raw.iter().zip(z).map(|(v, z)| if z.round() == 0.0 { 0.0 } else { v.max(0.0) }).collect();
     let sum: f64 = w.iter().sum();
     if !sum.is_finite() || sum <= 0.0 {
         return Err("allocation has no positive budget".into());
