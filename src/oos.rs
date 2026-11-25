@@ -110,6 +110,7 @@ fn optimized(s: &str, pt: &History, u: &[usize], c: &Run) -> Result<Choice, Stri
     let mut meta = Map::new();
     meta.insert("scenarios".into(), json!(y.nrows()));
     let cov = if matches!(s, "f1" | "f5") { Some(est::shrink(&y)?) } else { None };
+    let mut rho = None;
     let q: Sol = match s {
         "f1" | "f5" => {
             let (sh, dl) = cov.as_ref().unwrap();
@@ -122,13 +123,18 @@ fn optimized(s: &str, pt: &History, u: &[usize], c: &Run) -> Result<Choice, Stri
             }
         }
         "f2" | "f3" => {
-            let rho = median(mu);
-            meta.insert("rho".into(), json!(rho));
-            if s == "f2" { mad::mad(&y, x, Some(rho), tl, 0.0)? } else { cv::cv(&y, x, 0.95, Some(rho), tl, 0.0)? }
+            let m = median(mu);
+            rho = Some(m);
+            meta.insert("rho".into(), json!(m));
+            if s == "f2" { mad::mad(&y, x, rho, tl, 0.0)? } else { cv::cv(&y, x, 0.95, rho, tl, 0.0)? }
         }
         _ => return Err(format!("unknown strategy {s:?}")),
     };
-    let w = executable(s, &q, x, &y, cov.as_ref().map(|(s, _)| s), &mut meta)?;
+    let mut w = None;
+    if let Some((v, allocation)) = executable(s, &q, x, &y, cov.as_ref().map(|(s, _)| s), rho)? {
+        meta.insert("allocation".into(), allocation);
+        w = Some(v);
+    }
     Ok(Choice { cols: u.to_vec(), w, c: Some(q.c), meta })
 }
 
@@ -144,38 +150,30 @@ fn executable(
     x: Xk,
     y: &DMatrix<f64>,
     cov: Option<&DMatrix<f64>>,
-    meta: &mut Map<String, Value>,
-) -> Result<Option<Vec<f64>>, String> {
-    let w = if let (Some(raw), Some(z)) = (&q.w, &q.z) {
-        // A numerical repair is a new allocation. The solver certificate stays on raw.
-        let means = est::mom(y).0;
-        let rho = meta.get("rho").and_then(Value::as_f64);
-        let w = allocation(raw, z, x, &means, rho)?;
-        let f = match s {
-            "f1" => mv::obj(&w, &means, cov.unwrap(), LAM),
-            "f2" => mad::dev(y, &w),
-            "f3" => cv::cvar(&cv::losses(y, &w), 0.95),
-            "f5" => sk::obj(&w, y, GAM, KAP, &means, cov.unwrap()),
-            _ => unreachable!(),
-        };
-        if crate::crt::crossed(q.c.sn, f, q.c.bd, crate::crt::TOL) {
-            return Err("repaired allocation crosses the solver bound".into());
-        }
-        meta.insert(
-            "allocation".into(),
-            json!({
-                "raw_weights": raw, "weights": w, "selectors": z,
-                "repair_l1": raw.iter().zip(&w).map(|(a,b)| (a-b).abs()).sum::<f64>(),
-                "raw_objective": q.f, "objective": f,
-                "gap": crate::crt::num(crate::crt::gap(f, q.c.bd)),
-                "tolerance": 1e-7, "certificate_point": "raw_weights",
-            }),
-        );
-        Some(w)
-    } else {
-        None
+    rho: Option<f64>,
+) -> Result<Option<(Vec<f64>, Value)>, String> {
+    let (Some(raw), Some(z)) = (&q.w, &q.z) else { return Ok(None) };
+    // A numerical repair is a new allocation. The solver certificate stays on raw.
+    let means = est::mom(y).0;
+    let w = allocation(raw, z, x, &means, rho)?;
+    let f = match s {
+        "f1" => mv::obj(&w, &means, cov.unwrap(), LAM),
+        "f2" => mad::dev(y, &w),
+        "f3" => cv::cvar(&cv::losses(y, &w), 0.95),
+        "f5" => sk::obj(&w, y, GAM, KAP, &means, cov.unwrap()),
+        _ => unreachable!(),
     };
-    Ok(w)
+    if crate::crt::crossed(q.c.sn, f, q.c.bd, crate::crt::TOL) {
+        return Err("repaired allocation crosses the solver bound".into());
+    }
+    let record = json!({
+        "raw_weights": raw, "weights": w, "selectors": z,
+        "repair_l1": raw.iter().zip(&w).map(|(a,b)| (a-b).abs()).sum::<f64>(),
+        "raw_objective": q.f, "objective": f,
+        "gap": crate::crt::num(crate::crt::gap(f, q.c.bd)),
+        "tolerance": 1e-7, "certificate_point": "raw_weights",
+    });
+    Ok(Some((w, record)))
 }
 
 /// Executable weights must still satisfy X(K) and the formulation's return floor.

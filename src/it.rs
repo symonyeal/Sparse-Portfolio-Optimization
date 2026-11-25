@@ -74,7 +74,8 @@ pub fn it(r: &DMatrix<f64>, ri: &DVector<f64>, x: Xk, ea: f64, tl: Option<f64>, 
     let (x1, c1) = p1.solve(tl, gp)?;
     let mut o = It { w: None, a: None, b: None, f1: None, f2: None, c1: c1.clone(), c2: None, st: c1.st };
     let Some(x1) = x1 else { return Ok(o) };
-    let (a1, b1, f1) = checked(&x1, &c1, 1, &cols, x, (r, ri), d)?;
+    let audit = Audit { cols: &cols, x, r, ri, d };
+    let (a1, b1, f1) = audit.check(&x1, &c1, 1)?;
     o = It { w: Some(x1[cols.w.clone()].to_vec()), a: Some(a1), b: Some(b1), f1: Some(f1), ..o };
     if c1.st != St::Opt {
         return Ok(o);
@@ -86,34 +87,42 @@ pub fn it(r: &DMatrix<f64>, ri: &DVector<f64>, x: Xk, ea: f64, tl: Option<f64>, 
     o.st = c2.st;
     o.c2 = Some(c2.clone());
     let Some(x2) = x2 else { return Ok(o) };
-    let (a2, b2, f2) = checked(&x2, &c2, 2, &cols, x, (r, ri), d)?;
+    let (a2, b2, f2) = audit.check(&x2, &c2, 2)?;
     if (a2 - a1).abs() > ea + 1e-8 {
         return Err("F4 stage 2 violates the fixed stage-1 intercept".into());
     }
     Ok(It { w: Some(x2[cols.w].to_vec()), a: Some(a2), b: Some(b2), f2: Some(f2), ..o })
 }
 
-fn checked(
-    xs: &[f64],
-    c: &C,
-    stage: usize,
-    cols: &crate::x::Cols,
+/// Independent check of a stage's incumbent: membership of X(K), and the stage objective recomputed by
+/// regressing r w on ri against the solver's certificate and the D column.
+struct Audit<'a> {
+    cols: &'a crate::x::Cols,
     x: Xk,
-    returns: (&DMatrix<f64>, &DVector<f64>),
+    r: &'a DMatrix<f64>,
+    ri: &'a DVector<f64>,
     d: usize,
-) -> Result<(f64, f64, f64), String> {
-    let (r, ri) = returns;
-    let (w, z) = (&xs[cols.w.clone()], &xs[cols.z.clone()]);
-    if !x.ok(w, z, 1e-7).is_empty() {
-        return Err(format!("F4 stage {stage} incumbent violates X(K)"));
+}
+
+impl Audit<'_> {
+    /// (a'w, b'w, objective) of the stage-`stage` incumbent `xs` with certificate `c`.
+    fn check(&self, xs: &[f64], c: &C, stage: usize) -> Result<(f64, f64, f64), String> {
+        let (w, z) = (&xs[self.cols.w.clone()], &xs[self.cols.z.clone()]);
+        if !self.x.ok(w, z, 1e-7).is_empty() {
+            return Err(format!("F4 stage {stage} incumbent violates X(K)"));
+        }
+        let (ai, bi) = ols(&(self.r * DVector::from_column_slice(w)), self.ri)?;
+        let act = if stage == 1 { ai.abs() } else { (bi - 1.0).abs() };
+        let close = |u: f64, v: f64, rt: f64| (u - v).abs() <= 1e-8 + rt * v.abs();
+        if !c.f.is_finite()
+            || !close(xs[self.d], c.f, 1e-5)
+            || c.f < act - 1e-8
+            || (c.st == St::Opt && !close(act, c.f, 1e-7))
+        {
+            return Err(format!("F4 stage {stage} objective disagrees with independent regression"));
+        }
+        Ok((ai, bi, act))
     }
-    let (ai, bi) = ols(&(r * DVector::from_column_slice(w)), ri)?;
-    let act = if stage == 1 { ai.abs() } else { (bi - 1.0).abs() };
-    let close = |u: f64, v: f64, rt: f64| (u - v).abs() <= 1e-8 + rt * v.abs();
-    if !c.f.is_finite() || !close(xs[d], c.f, 1e-5) || c.f < act - 1e-8 || (c.st == St::Opt && !close(act, c.f, 1e-7)) {
-        return Err(format!("F4 stage {stage} objective disagrees with independent regression"));
-    }
-    Ok((ai, bi, act))
 }
 
 /// Tracking error: standard deviation (1/T) of r w - ri.
