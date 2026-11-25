@@ -411,57 +411,11 @@ pub fn crsp(p: &Path, shr: &[i64]) -> Result<Crsp, String> {
         csv::ReaderBuilder::new().has_headers(false).flexible(true).from_path(p).map_err(|e| format!("{d}: {e}"))?;
     let mut it = rd.records();
     let hd = it.next().ok_or(format!("{d}: empty extract"))?.map_err(|e| format!("{d}: {e}"))?;
-    let hd: Vec<String> = hd
-        .iter()
-        .map(|c| c.trim().trim_start_matches('\u{feff}').to_uppercase())
-        .map(|c| if c == "MTHCALDT" { "DATE".into() } else { c })
-        .collect();
-    let mut ix = [usize::MAX; 10];
-    for (k, c) in COLS.iter().enumerate() {
-        let f: Vec<usize> = (0..hd.len()).filter(|&j| hd[j] == *c).collect();
-        if f.len() == 1 {
-            ix[k] = f[0];
-        }
-    }
-    if hd.len() != COLS.len() || ix.contains(&usize::MAX) {
-        let ex: Vec<_> = hd.iter().filter(|c| !COLS.contains(&c.as_str())).collect();
-        let ms: Vec<_> = COLS.iter().filter(|c| !hd.contains(&c.to_string())).collect();
-        return Err(format!("{d}: fields must be exactly {COLS:?}; unread {ex:?}, missing {ms:?}"));
-    }
+    let ix = crsp_columns(&hd, &d)?;
     let mut o = Crsp::default();
     for (k, r) in it.enumerate() {
         let r = r.map_err(|_| format!("{d}: row {} unreadable", k + 2))?;
-        let bad = |c: &str| format!("{d}: row {} invalid {c}", k + 2);
-        if r.len() != COLS.len() {
-            return Err(format!("{d}: row {} has {} fields", k + 2, r.len()));
-        }
-        let g = |c: usize| &r[ix[c]];
-        for (c, v) in [(0, &mut o.permno), (1, &mut o.permco), (3, &mut o.shrcd), (4, &mut o.exchcd)] {
-            let x = integer(g(c)).map_err(|_| bad(COLS[c]))?;
-            if c < 2 && x <= 0 {
-                return Err(bad(COLS[c]));
-            }
-            v.push(x);
-        }
-        o.mo.push(date(g(2)).ok_or_else(|| bad("DATE"))?);
-        for (c, v) in [(5, &mut o.prc), (6, &mut o.shrout), (7, &mut o.ret), (9, &mut o.dlret)] {
-            let (x, code) = cell(g(c)).map_err(|_| bad(COLS[c]))?;
-            if ((c == 7 || c == 9) && x < -1.0) || (c == 6 && x < 0.0) {
-                return Err(bad(COLS[c]));
-            }
-            v.push(x);
-            if c == 7 {
-                o.retc.push(code);
-            } else if c == 9 {
-                o.dlretc.push(code);
-            }
-        }
-        let x = g(8).trim();
-        let dl = if x.is_empty() || x == "." { 0 } else { integer(x).map_err(|_| bad("DLSTCD"))? };
-        if dl < 0 {
-            return Err(bad("DLSTCD"));
-        }
-        o.dl.push(dl);
+        o.append(&r, &ix, &d, k)?;
     }
     let mut k: Vec<usize> = (0..o.mo.len()).filter(|&j| shr.contains(&o.shrcd[j])).collect();
     o.dropped = o.mo.len() - k.len();
@@ -479,7 +433,68 @@ pub fn crsp(p: &Path, shr: &[i64]) -> Result<Crsp, String> {
     Ok(c)
 }
 
+fn crsp_columns(hd: &csv::StringRecord, d: &std::path::Display<'_>) -> Result<[usize; 10], String> {
+    let hd: Vec<String> = hd
+        .iter()
+        .map(|c| c.trim().trim_start_matches('\u{feff}').to_uppercase())
+        .map(|c| if c == "MTHCALDT" { "DATE".into() } else { c })
+        .collect();
+    let mut ix = [usize::MAX; 10];
+    for (k, c) in COLS.iter().enumerate() {
+        let f: Vec<usize> = (0..hd.len()).filter(|&j| hd[j] == *c).collect();
+        if f.len() == 1 {
+            ix[k] = f[0];
+        }
+    }
+    if hd.len() != COLS.len() || ix.contains(&usize::MAX) {
+        let ex: Vec<_> = hd.iter().filter(|c| !COLS.contains(&c.as_str())).collect();
+        let ms: Vec<_> = COLS.iter().filter(|c| !hd.contains(&c.to_string())).collect();
+        return Err(format!("{d}: fields must be exactly {COLS:?}; unread {ex:?}, missing {ms:?}"));
+    }
+    Ok(ix)
+}
+
 impl Crsp {
+    fn append(
+        &mut self,
+        r: &csv::StringRecord,
+        ix: &[usize; 10],
+        d: &std::path::Display<'_>,
+        k: usize,
+    ) -> Result<(), String> {
+        let bad = |c: &str| format!("{d}: row {} invalid {c}", k + 2);
+        if r.len() != COLS.len() {
+            return Err(format!("{d}: row {} has {} fields", k + 2, r.len()));
+        }
+        let g = |c: usize| &r[ix[c]];
+        for (c, v) in [(0, &mut self.permno), (1, &mut self.permco), (3, &mut self.shrcd), (4, &mut self.exchcd)] {
+            let x = integer(g(c)).map_err(|_| bad(COLS[c]))?;
+            if c < 2 && x <= 0 {
+                return Err(bad(COLS[c]));
+            }
+            v.push(x);
+        }
+        self.mo.push(date(g(2)).ok_or_else(|| bad("DATE"))?);
+        for (c, v) in [(5, &mut self.prc), (6, &mut self.shrout), (7, &mut self.ret), (9, &mut self.dlret)] {
+            let (x, code) = cell(g(c)).map_err(|_| bad(COLS[c]))?;
+            if ((c == 7 || c == 9) && x < -1.0) || (c == 6 && x < 0.0) {
+                return Err(bad(COLS[c]));
+            }
+            v.push(x);
+            if c == 7 {
+                self.retc.push(code);
+            } else if c == 9 {
+                self.dlretc.push(code);
+            }
+        }
+        let x = g(8).trim();
+        let dl = if x.is_empty() || x == "." { 0 } else { integer(x).map_err(|_| bad("DLSTCD"))? };
+        if dl < 0 {
+            return Err(bad("DLSTCD"));
+        }
+        self.dl.push(dl);
+        Ok(())
+    }
     /// The rows k, in that order.
     pub fn pick(&self, k: &[usize]) -> Crsp {
         fn g<T: Clone>(v: &[T], k: &[usize]) -> Vec<T> {

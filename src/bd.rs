@@ -200,113 +200,144 @@ fn certificate(c: &Value) -> bool {
 /// Required fields and cross-field relationships for each retained wire result family.
 fn payload(key: &str, b: &Value) -> bool {
     if key.starts_with("oos-") {
-        let Some(mo) = b["mo"].as_array() else { return false };
-        let n = mo.len();
-        if n == 0
-            || !["W", "pc", "selection", "B1", "B1_errors", "B5"]
-                .iter()
-                .all(|k| b[*k].as_array().is_some_and(|v| v.len() == n))
-            || b["fills"].as_u64().is_none()
-            || mo.iter().any(|v| v.as_i64().is_none_or(|m| !(1..=12).contains(&(m % 100))))
-            || mo.windows(2).any(|w| w[0].as_i64() >= w[1].as_i64())
-        {
-            return false;
-        }
-        return (0..n).all(|i| {
-            let s = &b["selection"][i];
-            let w = &b["W"][i];
-            let Some(pc) = b["pc"][i].as_array() else { return false };
-            let status = s["status"].as_str();
-            pc.iter().all(|p| p.as_i64().is_some_and(|id| id > 0))
-                && s["eligible"].as_u64().is_some_and(|n| pc.len() as u64 <= n)
-                && matches!(
-                    status,
-                    Some("ok" | "unavailable" | "opt" | "limit" | "infeasible" | "unbounded" | "numerical")
-                )
-                && s.get("c").is_none_or(certificate)
-                && match status {
-                    Some("ok") => s.get("c").is_none(),
-                    Some("unavailable") => true,
-                    Some(st) => s.get("c").is_some_and(|c| c["st"] == st),
-                    None => false,
-                }
-                && (w.is_null() || nonnegative(w))
-                && nonnegative(&b["B5"][i])
-                && (b["B1"][i].is_null() || nonnegative(&b["B1"][i]))
-                && (if b["B1"][i].is_null() { b["B1_errors"][i].is_string() } else { b["B1_errors"][i].is_null() })
-                && (w.is_null() == pc.is_empty())
-                && (status != Some("ok") || nonnegative(w))
-                && (status != Some("unavailable") || (w.is_null() && s["reason"].is_string()))
-                && (w.is_null() || s.get("c").is_none_or(|c| finite(&c["f"])))
-        });
+        return oos_payload(b);
     }
     if key.starts_with("boot-") {
-        return ["life", "1y", "10y"].iter().all(|h| {
-            let s = &b[*h];
-            finite(&s["mean"])
-                && finite(&s["med"])
-                && s.get("skew").is_some_and(nullable)
-                && ["gt0", "gtf", "gtvw"].iter().all(|k| s[*k].as_f64().is_some_and(|x| (0.0..=1.0).contains(&x)))
-        });
+        return boot_payload(b);
     }
     if !nonnegative(&b["wall"]) {
         return false;
     }
     if key.starts_with("g1-") {
-        return b["n"].as_u64().is_some_and(|n| n > 0)
-            && ["max_abs", "max_rel", "kkt", "max_separation"].iter().all(|k| nonnegative(&b[*k]))
-            && ["max_pos", "min_neg"].iter().all(|k| finite(&b[*k]))
-            && b["half_unit"].as_f64().is_some_and(|x| (0.0..=1.0).contains(&x))
-            && b["rectangles"].as_u64().is_some_and(|n| Some(n) <= b["n"].as_u64())
-            && b["pass"].as_bool().is_some();
+        return g1_payload(b);
     }
     if key.starts_with("chang-") {
-        let Some(p) = b["pts"].as_array() else { return false };
-        return p.len() == 50
-            && p.iter().all(|q| {
-                finite(&q["lam"])
-                    && matches!(q["st"].as_str(), Some("opt" | "limit" | "infeasible" | "unbounded" | "numerical"))
-                    && ["g", "y", "x", "pd"].iter().all(|k| q.get(*k).is_some_and(nullable))
-            })
-            && b["n"].as_u64() == Some(p.iter().filter(|q| finite(&q["pd"])).count() as u64)
-            && b["all_opt"].as_bool() == Some(p.iter().all(|q| q["st"] == "opt"))
-            && b.get("median").is_some_and(nullable)
-            && b.get("mean").is_some_and(nullable);
+        return chang_payload(b);
     }
     if key.starts_with("f4-") {
-        if !certificate(&b["c1"])
-            || !b["N"].as_u64().is_some_and(|n| n > 0)
-            || b["drop"].as_u64().is_none()
-            || b.get("c2").is_none()
-        {
-            return false;
-        }
-        let stages =
-            if b["c2"].is_null() { b["c1"]["st"] != "opt" } else { b["c1"]["st"] == "opt" && certificate(&b["c2"]) };
-        let metrics = ["a_in", "b_in", "a_out", "b_out", "te_in", "te_out", "names"];
-        return stages
-            && if finite(&b["c1"]["f"]) {
-                metrics[..6].iter().all(|k| finite(&b[*k]))
-                    && b["names"].as_u64().is_some_and(|n| n > 0 && Some(n) <= b["N"].as_u64())
-            } else {
-                metrics.iter().all(|k| b.get(*k).is_none()) && b["c2"].is_null()
-            };
+        return f4_payload(b);
     }
     if key.starts_with("rq5-") || key.starts_with("f5-") {
-        return certificate(&b["c"])
-            && b["N"].as_u64().is_some_and(|n| n > 0)
-            && b.get("f").is_some_and(nullable)
-            && same(&b["f"], &b["c"]["f"]);
+        return cardinal_payload(b);
     }
     if key.starts_with("f2-") || key.starts_with("f3-") {
-        return certificate(&b["c"])
-            && b.get("recomputed").is_some_and(nullable)
-            && same(&b["recomputed"], &b["c"]["f"])
-            && b.get("diff").is_some_and(nullable)
-            && b.get("ok").is_some()
-            && (if finite(&b["c"]["f"]) { b["ok"] == true && nonnegative(&b["diff"]) } else { b["ok"].is_null() });
+        return deviation_payload(b);
     }
     false
+}
+
+fn oos_payload(b: &Value) -> bool {
+    let Some(mo) = b["mo"].as_array() else { return false };
+    let n = mo.len();
+    if n == 0
+        || !["W", "pc", "selection", "B1", "B1_errors", "B5"]
+            .iter()
+            .all(|k| b[*k].as_array().is_some_and(|v| v.len() == n))
+        || b["fills"].as_u64().is_none()
+        || mo.iter().any(|v| v.as_i64().is_none_or(|m| !(1..=12).contains(&(m % 100))))
+        || mo.windows(2).any(|w| w[0].as_i64() >= w[1].as_i64())
+    {
+        return false;
+    }
+    (0..n).all(|i| oos_row(b, i))
+}
+
+fn boot_payload(b: &Value) -> bool {
+    ["life", "1y", "10y"].iter().all(|h| {
+        let s = &b[*h];
+        finite(&s["mean"])
+            && finite(&s["med"])
+            && s.get("skew").is_some_and(nullable)
+            && ["gt0", "gtf", "gtvw"].iter().all(|k| s[*k].as_f64().is_some_and(|x| (0.0..=1.0).contains(&x)))
+    })
+}
+
+fn g1_payload(b: &Value) -> bool {
+    b["n"].as_u64().is_some_and(|n| n > 0)
+        && ["max_abs", "max_rel", "kkt", "max_separation"].iter().all(|k| nonnegative(&b[*k]))
+        && ["max_pos", "min_neg"].iter().all(|k| finite(&b[*k]))
+        && b["half_unit"].as_f64().is_some_and(|x| (0.0..=1.0).contains(&x))
+        && b["rectangles"].as_u64().is_some_and(|n| Some(n) <= b["n"].as_u64())
+        && b["pass"].as_bool().is_some()
+}
+
+fn chang_payload(b: &Value) -> bool {
+    let Some(p) = b["pts"].as_array() else { return false };
+    p.len() == 50
+        && p.iter().all(|q| {
+            finite(&q["lam"])
+                && matches!(q["st"].as_str(), Some("opt" | "limit" | "infeasible" | "unbounded" | "numerical"))
+                && ["g", "y", "x", "pd"].iter().all(|k| q.get(*k).is_some_and(nullable))
+        })
+        && b["n"].as_u64() == Some(p.iter().filter(|q| finite(&q["pd"])).count() as u64)
+        && b["all_opt"].as_bool() == Some(p.iter().all(|q| q["st"] == "opt"))
+        && b.get("median").is_some_and(nullable)
+        && b.get("mean").is_some_and(nullable)
+}
+
+fn f4_payload(b: &Value) -> bool {
+    if !certificate(&b["c1"])
+        || !b["N"].as_u64().is_some_and(|n| n > 0)
+        || b["drop"].as_u64().is_none()
+        || b.get("c2").is_none()
+    {
+        return false;
+    }
+    let stages =
+        if b["c2"].is_null() { b["c1"]["st"] != "opt" } else { b["c1"]["st"] == "opt" && certificate(&b["c2"]) };
+    let metrics = ["a_in", "b_in", "a_out", "b_out", "te_in", "te_out", "names"];
+    stages
+        && if finite(&b["c1"]["f"]) {
+            metrics[..6].iter().all(|k| finite(&b[*k]))
+                && b["names"].as_u64().is_some_and(|n| n > 0 && Some(n) <= b["N"].as_u64())
+        } else {
+            metrics.iter().all(|k| b.get(*k).is_none()) && b["c2"].is_null()
+        }
+}
+
+fn cardinal_payload(b: &Value) -> bool {
+    certificate(&b["c"])
+        && b["N"].as_u64().is_some_and(|n| n > 0)
+        && b.get("f").is_some_and(nullable)
+        && same(&b["f"], &b["c"]["f"])
+}
+
+fn deviation_payload(b: &Value) -> bool {
+    certificate(&b["c"])
+        && b.get("recomputed").is_some_and(nullable)
+        && same(&b["recomputed"], &b["c"]["f"])
+        && b.get("diff").is_some_and(nullable)
+        && b.get("ok").is_some()
+        && (if finite(&b["c"]["f"]) { b["ok"] == true && nonnegative(&b["diff"]) } else { b["ok"].is_null() })
+}
+
+fn oos_row(b: &Value, i: usize) -> bool {
+    let s = &b["selection"][i];
+    let w = &b["W"][i];
+    let Some(pc) = b["pc"][i].as_array() else { return false };
+    let status = s["status"].as_str();
+    pc.iter().all(|p| p.as_i64().is_some_and(|id| id > 0))
+        && s["eligible"].as_u64().is_some_and(|n| pc.len() as u64 <= n)
+        && matches!(status, Some("ok" | "unavailable" | "opt" | "limit" | "infeasible" | "unbounded" | "numerical"))
+        && selection_certificate(s, status)
+        && (w.is_null() || nonnegative(w))
+        && nonnegative(&b["B5"][i])
+        && (b["B1"][i].is_null() || nonnegative(&b["B1"][i]))
+        && (if b["B1"][i].is_null() { b["B1_errors"][i].is_string() } else { b["B1_errors"][i].is_null() })
+        && (w.is_null() == pc.is_empty())
+        && (status != Some("ok") || nonnegative(w))
+        && (status != Some("unavailable") || (w.is_null() && s["reason"].is_string()))
+        && (w.is_null() || s.get("c").is_none_or(|c| finite(&c["f"])))
+}
+
+fn selection_certificate(s: &Value, status: Option<&str>) -> bool {
+    s.get("c").is_none_or(certificate)
+        && match status {
+            Some("ok") => s.get("c").is_none(),
+            Some("unavailable") => true,
+            Some(st) => s.get("c").is_some_and(|c| c["st"] == st),
+            None => false,
+        }
 }
 
 /// A clean committed bundle matching the current sources, parameters and expected inputs.

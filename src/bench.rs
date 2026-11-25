@@ -100,71 +100,9 @@ pub fn run(kd: &str, pa: &Value, tl: f64) -> Result<Value, String> {
     let k = u(pa, "k");
     let tl = Some(tl);
     match kd {
-        "g1" => {
-            let p = data::port(k, None)?;
-            let ef = data::portef(k, None)?.ef;
-            let (mu, s) = (&p.mu, &p.s);
-            let lo = mu.iter().copied().fold(f64::INFINITY, f64::min);
-            let hi = mu.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            let it = 5 * p.n;
-            let mut f0 = vec![1.0; p.n];
-            let (mut dv, mut kt, mut sep) = (vec![], vec![], vec![]);
-            for &(x, v) in &ef {
-                let q = mv::qp(mu, s, x, &f0, 1e-12, it)?;
-                f0 = q.w.iter().map(|&w| w + f64::from(u8::from(w > 0.0))).collect();
-                dv.push(q.f - v);
-                let mut fs = vec![q.f];
-                kt.push(q.kt.iter().copied().fold(0.0, f64::max));
-                for a in [lo.max(x - 5e-11), hi.min(x + 5e-11)] {
-                    let q = mv::qp(mu, s, a, &f0, 1e-12, it)?;
-                    fs.push(q.f);
-                    kt.push(q.kt.iter().copied().fold(0.0, f64::max));
-                }
-                let (fmin, fmax) =
-                    fs.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &f| (a.min(f), b.max(f)));
-                sep.push(0f64.max(fmin - v - 5e-11).max(v - 5e-11 - fmax));
-            }
-            let mx = |x: &[f64]| x.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            let ms = mx(&sep);
-            let kk = mx(&kt);
-            Ok(json!({
-                "n": dv.len(), "max_abs": mx(&dv.iter().map(|d| d.abs()).collect::<Vec<_>>()),
-                "max_pos": mx(&dv), "min_neg": dv.iter().copied().fold(f64::INFINITY, f64::min),
-                "half_unit": dv.iter().filter(|d| d.abs() <= 5e-11).count() as f64 / dv.len() as f64,
-                "max_rel": mx(&dv.iter().zip(&ef).map(|(d, e)| d.abs() / e.1).collect::<Vec<_>>()),
-                "kkt": kk, "rectangles": sep.iter().filter(|&&s| s == 0.0).count(),
-                "max_separation": ms, "pass": ms == 0.0 && kk < 1e-12,
-            }))
-        }
-        "chang" => {
-            let p = data::port(k, None)?;
-            let ef = data::portef(k, None)?.ef;
-            let x = Xk::new(p.n, u(pa, "K"), pa["e"].as_f64().unwrap(), 1.0, Sn::Eq)?;
-            let mut pts = vec![];
-            for e in 1..=50 {
-                let l = (e - 1) as f64 / 49.0; // Chang et al. (2000): E = 50
-                let s = mv::f1(&p.mu, &p.s, x, l, None, false, tl, 0.0)?;
-                let (sd, m) =
-                    s.w.as_ref().map_or((f64::NAN, f64::NAN), |w| (mv::quad(w, &p.s).sqrt(), mv::dot(&p.mu, w)));
-                pts.push(
-                    json!({"lam": l, "st": s.c.st.name(), "g": s.c.g, "y": m, "x": sd, "pd": mv::pdev(&ef, sd, m)}),
-                );
-            }
-            let mut v: Vec<f64> = pts.iter().filter_map(|q| q["pd"].as_f64()).collect();
-            v.sort_by(f64::total_cmp);
-            let n = v.len();
-            let med = (n > 0).then(|| if n % 2 == 1 { v[n / 2] } else { 0.5 * (v[n / 2 - 1] + v[n / 2]) });
-            let mean = (n > 0).then(|| v.iter().sum::<f64>() / n as f64);
-            Ok(
-                json!({"pts": pts, "median": med, "mean": mean, "n": n, "all_opt": pts.iter().all(|q| q["st"] == "opt")}),
-            )
-        }
-        "rq5" => {
-            let p = data::port(k, None)?;
-            let x = Xk::new(p.n, u(pa, "K"), pa["e"].as_f64().unwrap(), 1.0, Sn::Eq)?;
-            let s = mv::f1(&p.mu, &p.s, x, pa["lam"].as_f64().unwrap(), None, pa["p"] == true, tl, 0.0)?;
-            Ok(json!({"c": s.c.json(), "f": s.f, "N": p.n}))
-        }
+        "g1" => g1(k),
+        "chang" => chang(k, pa, tl),
+        "rq5" => rq5(k, pa, tl),
         _ => {
             let d = data::indtrack(k, None, k == 7 || k == 8)?;
             let (mut r, mut ri) = d.lr();
@@ -211,6 +149,68 @@ pub fn run(kd: &str, pa: &Value, tl: f64) -> Result<Value, String> {
             }
         }
     }
+}
+
+fn g1(k: usize) -> Result<Value, String> {
+    let p = data::port(k, None)?;
+    let ef = data::portef(k, None)?.ef;
+    let (mu, s) = (&p.mu, &p.s);
+    let lo = mu.iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = mu.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let it = 5 * p.n;
+    let mut f0 = vec![1.0; p.n];
+    let (mut dv, mut kt, mut sep) = (vec![], vec![], vec![]);
+    for &(x, v) in &ef {
+        let q = mv::qp(mu, s, x, &f0, 1e-12, it)?;
+        f0 = q.w.iter().map(|&w| w + f64::from(u8::from(w > 0.0))).collect();
+        dv.push(q.f - v);
+        let mut fs = vec![q.f];
+        kt.push(q.kt.iter().copied().fold(0.0, f64::max));
+        for a in [lo.max(x - 5e-11), hi.min(x + 5e-11)] {
+            let q = mv::qp(mu, s, a, &f0, 1e-12, it)?;
+            fs.push(q.f);
+            kt.push(q.kt.iter().copied().fold(0.0, f64::max));
+        }
+        let (fmin, fmax) = fs.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &f| (a.min(f), b.max(f)));
+        sep.push(0f64.max(fmin - v - 5e-11).max(v - 5e-11 - fmax));
+    }
+    let mx = |x: &[f64]| x.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let ms = mx(&sep);
+    let kk = mx(&kt);
+    Ok(json!({
+        "n": dv.len(), "max_abs": mx(&dv.iter().map(|d| d.abs()).collect::<Vec<_>>()),
+        "max_pos": mx(&dv), "min_neg": dv.iter().copied().fold(f64::INFINITY, f64::min),
+        "half_unit": dv.iter().filter(|d| d.abs() <= 5e-11).count() as f64 / dv.len() as f64,
+        "max_rel": mx(&dv.iter().zip(&ef).map(|(d, e)| d.abs() / e.1).collect::<Vec<_>>()),
+        "kkt": kk, "rectangles": sep.iter().filter(|&&s| s == 0.0).count(),
+        "max_separation": ms, "pass": ms == 0.0 && kk < 1e-12,
+    }))
+}
+
+fn chang(k: usize, pa: &Value, tl: Option<f64>) -> Result<Value, String> {
+    let p = data::port(k, None)?;
+    let ef = data::portef(k, None)?.ef;
+    let x = Xk::new(p.n, u(pa, "K"), pa["e"].as_f64().unwrap(), 1.0, Sn::Eq)?;
+    let mut pts = vec![];
+    for e in 1..=50 {
+        let l = (e - 1) as f64 / 49.0; // Chang et al. (2000): E = 50
+        let s = mv::f1(&p.mu, &p.s, x, l, None, false, tl, 0.0)?;
+        let (sd, m) = s.w.as_ref().map_or((f64::NAN, f64::NAN), |w| (mv::quad(w, &p.s).sqrt(), mv::dot(&p.mu, w)));
+        pts.push(json!({"lam": l, "st": s.c.st.name(), "g": s.c.g, "y": m, "x": sd, "pd": mv::pdev(&ef, sd, m)}));
+    }
+    let mut v: Vec<f64> = pts.iter().filter_map(|q| q["pd"].as_f64()).collect();
+    v.sort_by(f64::total_cmp);
+    let n = v.len();
+    let med = (n > 0).then(|| if n % 2 == 1 { v[n / 2] } else { 0.5 * (v[n / 2 - 1] + v[n / 2]) });
+    let mean = (n > 0).then(|| v.iter().sum::<f64>() / n as f64);
+    Ok(json!({"pts": pts, "median": med, "mean": mean, "n": n, "all_opt": pts.iter().all(|q| q["st"] == "opt")}))
+}
+
+fn rq5(k: usize, pa: &Value, tl: Option<f64>) -> Result<Value, String> {
+    let p = data::port(k, None)?;
+    let x = Xk::new(p.n, u(pa, "K"), pa["e"].as_f64().unwrap(), 1.0, Sn::Eq)?;
+    let s = mv::f1(&p.mu, &p.s, x, pa["lam"].as_f64().unwrap(), None, pa["p"] == true, tl, 0.0)?;
+    Ok(json!({"c": s.c.json(), "f": s.f, "N": p.n}))
 }
 
 /// Run a case and write its bundle; returns the wall seconds.

@@ -53,6 +53,19 @@ impl std::ops::Deref for History {
     }
 }
 
+fn monthly_series(mo: &[i64], rf: &[f64], r: &DMatrix<f64>) -> Result<(), String> {
+    if mo.iter().any(|m| !(1..=12).contains(&(m % 100))) || mo.windows(2).any(|w| w[1] != nx(w[0])) {
+        return Err("panel months must be valid and consecutive".into());
+    }
+    if rf.iter().any(|x| !x.is_finite() || *x < -1.0) {
+        return Err("T-bill return missing in a panel month".into());
+    }
+    if r.iter().any(|x| x.is_infinite() || *x < -1.0) {
+        return Err("panel return must be finite or missing and at least -1".into());
+    }
+    Ok(())
+}
+
 impl P {
     pub fn months(&self) -> &[i64] {
         &self.mo
@@ -91,15 +104,7 @@ impl P {
         if tm == 0 || me.shape() != (tm, n) || rf.len() != tm || mo.len() != tm || ids.len() != n {
             return Err("panel arrays disagree in shape".into());
         }
-        if mo.iter().any(|m| !(1..=12).contains(&(m % 100))) || mo.windows(2).any(|w| w[1] != nx(w[0])) {
-            return Err("panel months must be valid and consecutive".into());
-        }
-        if rf.iter().any(|x| !x.is_finite() || *x < -1.0) {
-            return Err("T-bill return missing in a panel month".into());
-        }
-        if r.iter().any(|x| x.is_infinite() || *x < -1.0) {
-            return Err("panel return must be finite or missing and at least -1".into());
-        }
+        monthly_series(&mo, &rf, &r)?;
         if pct.shape() != (tm, n) {
             return Err("PERMCO labels disagree in shape".into());
         }

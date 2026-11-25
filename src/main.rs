@@ -158,6 +158,66 @@ fn configure(a: &Args) -> Result<(), String> {
     data::set_root(&a.path("root").unwrap_or_else(data::root))
 }
 
+fn oos_command(rest: &[String], cmd: &[String]) -> Result<(), String> {
+    let a = Args::parse(
+        rest,
+        &["fill", "missing"],
+        &[],
+        &["crsp", "rf", "only", "K", "M", "m", "Nc", "H", "time", "seed"],
+    )?;
+    configure(&a)?;
+    let crsp = a.path("crsp").ok_or("no CRSP extract supplied (--crsp): P6 is blocked; see docs/PLAN.md")?;
+    let r = run_of(&a)?;
+    let out = oos::out();
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let _lease = bd::lease(&out)?;
+    oos::main(&crsp, &rf(&a), &a.all("only"), &r, a.has("missing"), &out, &clean()?, cmd)
+}
+
+fn eval_command(rest: &[String]) -> Result<(), String> {
+    let a = Args::parse(rest, &["fill"], &[], &["crsp", "rf", "only", "K", "M", "m", "Nc", "H", "time", "seed"])?;
+    configure(&a)?;
+    let crsp = a.path("crsp").ok_or("eval needs --crsp PATH; the synthetic fixture is tests/data/panel.csv")?;
+    let r = run_of(&a)?;
+    eval::main(&crsp, &rf(&a), &a.all("only"), &r)
+}
+
+fn boot_command(rest: &[String], cmd: &[String]) -> Result<(), String> {
+    let a = Args::parse(rest, &["missing"], &["sizes"], &["crsp", "rf", "n", "seed"])?;
+    configure(&a)?;
+    let crsp = a.path("crsp").ok_or("no CRSP extract supplied (--crsp): P5 is blocked; see docs/PLAN.md")?;
+    let sizes: Vec<usize> = if a.has("sizes") {
+        a.all("sizes")
+            .iter()
+            .map(|s| s.parse().map_err(|_| format!("--sizes: invalid value {s:?}")))
+            .collect::<Result<_, _>>()?
+    } else {
+        vec![1, 5, 25, 50, 100]
+    };
+    let out = boot::out();
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let _lease = bd::lease(&out)?;
+    boot::main(&crsp, &rf(&a), a.get("n", 20000)?, &sizes, a.get("seed", 0)?, a.has("missing"), &out, &clean()?, cmd)
+}
+
+fn fetch_command(rest: &[String]) -> Result<(), String> {
+    let a = Args::parse(rest, &[], &[], &[])?;
+    configure(&a)?;
+    let p = data::ff_path();
+    let h = data::fetch(&p)?;
+    println!("{} {h}", p.display());
+    Ok(())
+}
+
+fn learn_command(rest: &[String]) -> Result<(), String> {
+    let a = Args::parse(rest, &[], &[], &["input", "out"])?;
+    configure(&a)?;
+    let input = a.path("input").ok_or("learn needs --input PATH to the French industry archive")?;
+    let out = a.path("out").unwrap_or_else(|| data::root().join("docs/results/industry.json"));
+    clean()?;
+    learn::main(&input, &out)
+}
+
 fn run(argv: &[String]) -> Result<(), String> {
     let (c, rest) = argv.split_first().ok_or("usage: pf bench|oos|eval|boot|fetch [options]; see src/main.rs")?;
     let cmd: Vec<String> = std::iter::once("pf".to_string()).chain(argv.iter().cloned()).collect();
@@ -167,72 +227,11 @@ fn run(argv: &[String]) -> Result<(), String> {
             configure(&a)?;
             bench(&a, &cmd)
         }
-        "oos" => {
-            let a = Args::parse(
-                rest,
-                &["fill", "missing"],
-                &[],
-                &["crsp", "rf", "only", "K", "M", "m", "Nc", "H", "time", "seed"],
-            )?;
-            configure(&a)?;
-            let crsp = a.path("crsp").ok_or("no CRSP extract supplied (--crsp): P6 is blocked; see docs/PLAN.md")?;
-            let r = run_of(&a)?;
-            let out = oos::out();
-            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-            let _lease = bd::lease(&out)?;
-            oos::main(&crsp, &rf(&a), &a.all("only"), &r, a.has("missing"), &out, &clean()?, &cmd)
-        }
-        "eval" => {
-            let a =
-                Args::parse(rest, &["fill"], &[], &["crsp", "rf", "only", "K", "M", "m", "Nc", "H", "time", "seed"])?;
-            configure(&a)?;
-            let crsp = a.path("crsp").ok_or("eval needs --crsp PATH; the synthetic fixture is tests/data/panel.csv")?;
-            let r = run_of(&a)?;
-            eval::main(&crsp, &rf(&a), &a.all("only"), &r)
-        }
-        "boot" => {
-            let a = Args::parse(rest, &["missing"], &["sizes"], &["crsp", "rf", "n", "seed"])?;
-            configure(&a)?;
-            let crsp = a.path("crsp").ok_or("no CRSP extract supplied (--crsp): P5 is blocked; see docs/PLAN.md")?;
-            let sizes: Vec<usize> = if a.has("sizes") {
-                a.all("sizes")
-                    .iter()
-                    .map(|s| s.parse().map_err(|_| format!("--sizes: invalid value {s:?}")))
-                    .collect::<Result<_, _>>()?
-            } else {
-                vec![1, 5, 25, 50, 100]
-            };
-            let out = boot::out();
-            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-            let _lease = bd::lease(&out)?;
-            boot::main(
-                &crsp,
-                &rf(&a),
-                a.get("n", 20000)?,
-                &sizes,
-                a.get("seed", 0)?,
-                a.has("missing"),
-                &out,
-                &clean()?,
-                &cmd,
-            )
-        }
-        "fetch" => {
-            let a = Args::parse(rest, &[], &[], &[])?;
-            configure(&a)?;
-            let p = data::ff_path();
-            let h = data::fetch(&p)?;
-            println!("{} {h}", p.display());
-            Ok(())
-        }
-        "learn" => {
-            let a = Args::parse(rest, &[], &[], &["input", "out"])?;
-            configure(&a)?;
-            let input = a.path("input").ok_or("learn needs --input PATH to the French industry archive")?;
-            let out = a.path("out").unwrap_or_else(|| data::root().join("docs/results/industry.json"));
-            clean()?;
-            learn::main(&input, &out)
-        }
+        "oos" => oos_command(rest, &cmd),
+        "eval" => eval_command(rest),
+        "boot" => boot_command(rest, &cmd),
+        "fetch" => fetch_command(rest),
+        "learn" => learn_command(rest),
         _ => Err(format!("unknown command {c:?}; use bench, oos, eval, boot, fetch or learn")),
     }
 }

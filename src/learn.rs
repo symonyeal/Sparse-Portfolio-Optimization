@@ -43,27 +43,34 @@ fn parse(text: &str) -> Result<Industry, String> {
         if row.is_empty() {
             break;
         }
-        let c: Vec<_> = row.split(',').map(str::trim).collect();
-        if c.len() != N + 1 || c[0].len() != 6 || !c[0].bytes().all(|b| b.is_ascii_digit()) {
-            return Err("malformed industry monthly row".into());
-        }
-        let month: i64 = c[0].parse().map_err(|_| "invalid industry month")?;
-        if month / 100 < 1 || !(1..=12).contains(&(month % 100)) || mo.last().is_some_and(|&p| data::nx(p) != month) {
-            return Err("industry months must be valid, unique and consecutive".into());
-        }
+        let (month, returns) = monthly_row(row, mo.last())?;
         mo.push(month);
-        for v in &c[1..] {
-            let v: f64 = v.parse().map_err(|_| "invalid industry return")?;
-            if !v.is_finite() || v == -99.99 || v == -999.0 || v < -100.0 {
-                return Err("missing or invalid industry return".into());
-            }
-            r.push(v / 100.0);
-        }
+        r.extend(returns);
     }
     if mo.is_empty() {
         return Err("empty industry monthly block".into());
     }
     Ok(Industry { r: DMatrix::from_row_slice(mo.len(), N, &r), mo, vintage })
+}
+
+fn monthly_row(row: &str, previous: Option<&i64>) -> Result<(i64, Vec<f64>), String> {
+    let c: Vec<_> = row.split(',').map(str::trim).collect();
+    if c.len() != N + 1 || c[0].len() != 6 || !c[0].bytes().all(|b| b.is_ascii_digit()) {
+        return Err("malformed industry monthly row".into());
+    }
+    let month: i64 = c[0].parse().map_err(|_| "invalid industry month")?;
+    if month / 100 < 1 || !(1..=12).contains(&(month % 100)) || previous.is_some_and(|&p| data::nx(p) != month) {
+        return Err("industry months must be valid, unique and consecutive".into());
+    }
+    let mut r = Vec::new();
+    for v in &c[1..] {
+        let v: f64 = v.parse().map_err(|_| "invalid industry return")?;
+        if !v.is_finite() || v == -99.99 || v == -999.0 || v < -100.0 {
+            return Err("missing or invalid industry return".into());
+        }
+        r.push(v / 100.0);
+    }
+    Ok((month, r))
 }
 
 fn read(p: &Path) -> Result<Industry, String> {

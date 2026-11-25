@@ -49,21 +49,15 @@ pub fn outcomes(
     Ok((x, f, m))
 }
 
-/// The boot command.
-pub fn main(
-    crsp: &Path,
-    rf: &Path,
-    n: usize,
-    sizes: &[usize],
-    seed: u64,
-    missing: bool,
-    out: &Path,
-    code: &Value,
-    cmd: &[String],
-) -> Result<(), String> {
-    if n < 1 || sizes.iter().any(|&k| k < 1) || sizes.is_empty() {
-        return Err("positive draw sizes and replications are required".into());
-    }
+struct Inputs {
+    p0: crate::panel::P,
+    i: DMatrix<f64>,
+    vw: Vec<f64>,
+    ip: Value,
+    prev: i64,
+}
+
+fn inputs(crsp: &Path, rf: &Path) -> Result<Inputs, String> {
     let rows = data::crsp(crsp, &[10, 11, 12])?;
     let rfd = data::rf(rf)?;
     let (y, m) = (SPAN.0 / 100, SPAN.0 % 100);
@@ -94,8 +88,27 @@ pub fn main(
         return Err("CRSP extract needs usable preceding-month valuations".into());
     }
     let vw = bs::vw(&p0.r, &i)?;
-    let link = |r: &[f64]| r.iter().fold(1.0, |p, x| p * (1.0 + x)) - 1.0;
     let ip = json!({"crsp": rows.sha, "rf": rfd.sha, "rf_vintage": rfd.vintage, "plan": data::sha256(&data::root().join("docs").join("PLAN.md"))?});
+    Ok(Inputs { p0, i, vw, ip, prev })
+}
+
+/// The boot command.
+pub fn main(
+    crsp: &Path,
+    rf: &Path,
+    n: usize,
+    sizes: &[usize],
+    seed: u64,
+    missing: bool,
+    out: &Path,
+    code: &Value,
+    cmd: &[String],
+) -> Result<(), String> {
+    if n < 1 || sizes.iter().any(|&k| k < 1) || sizes.is_empty() {
+        return Err("positive draw sizes and replications are required".into());
+    }
+    let Inputs { p0, i, vw, ip, prev } = inputs(crsp, rf)?;
+    let link = |r: &[f64]| r.iter().fold(1.0, |p, x| p * (1.0 + x)) - 1.0;
     for &kk in sizes {
         let key = format!("boot-K{kk}");
         let pa = json!({"K": kk, "n": n, "seed": seed, "span": [SPAN.0, SPAN.1], "valuation": prev});

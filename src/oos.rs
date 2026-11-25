@@ -76,12 +76,7 @@ pub fn window(pt: &History, u: &[usize], mw: usize, m: usize) -> Result<DMatrix<
 /// Selection on a cut panel by strategy s.
 pub fn select(s: &str, pt: &History, u: &[usize], c: &Run, g: &mut StdRng) -> Result<Choice, String> {
     c.validate()?;
-    if u.is_empty()
-        || u.iter().any(|&i| i >= pt.r.ncols())
-        || u.iter().collect::<std::collections::BTreeSet<_>>().len() != u.len()
-    {
-        return Err("selection needs unique nonempty history columns".into());
-    }
+    selection_columns(pt, u)?;
     let plain = |(cols, w): (Vec<usize>, Vec<f64>)| Choice { cols, w: Some(w), c: None, meta: Map::new() };
     if s == "b2" {
         return Ok(plain(b2(u)));
@@ -94,8 +89,22 @@ pub fn select(s: &str, pt: &History, u: &[usize], c: &Run, g: &mut StdRng) -> Re
         "b4" => return Ok(plain(b4(u, c.k, g))),
         _ => {}
     }
+    optimized(s, pt, u, c)
+}
+
+fn selection_columns(pt: &History, u: &[usize]) -> Result<(), String> {
+    if u.is_empty()
+        || u.iter().any(|&i| i >= pt.r.ncols())
+        || u.iter().collect::<std::collections::BTreeSet<_>>().len() != u.len()
+    {
+        return Err("selection needs unique nonempty history columns".into());
+    }
+    Ok(())
+}
+
+fn optimized(s: &str, pt: &History, u: &[usize], c: &Run) -> Result<Choice, String> {
     let y = window(pt, u, c.mw, c.m)?;
-    let mut mu: Vec<f64> = y.column_iter().map(|x| x.mean()).collect();
+    let mu: Vec<f64> = y.column_iter().map(|x| x.mean()).collect();
     let x = Xk::new(u.len(), c.k, 0.0, 1.0, Sn::Le)?;
     let tl = Some(c.tl);
     let mut meta = Map::new();
@@ -113,24 +122,40 @@ pub fn select(s: &str, pt: &History, u: &[usize], c: &Run, g: &mut StdRng) -> Re
             }
         }
         "f2" | "f3" => {
-            mu.sort_by(f64::total_cmp);
-            let n = mu.len();
-            let rho = if n % 2 == 1 { mu[n / 2] } else { 0.5 * (mu[n / 2 - 1] + mu[n / 2]) };
+            let rho = median(mu);
             meta.insert("rho".into(), json!(rho));
             if s == "f2" { mad::mad(&y, x, Some(rho), tl, 0.0)? } else { cv::cv(&y, x, 0.95, Some(rho), tl, 0.0)? }
         }
         _ => return Err(format!("unknown strategy {s:?}")),
     };
+    let w = executable(s, &q, x, &y, cov.as_ref().map(|(s, _)| s), &mut meta)?;
+    Ok(Choice { cols: u.to_vec(), w, c: Some(q.c), meta })
+}
+
+fn median(mut values: Vec<f64>) -> f64 {
+    values.sort_by(f64::total_cmp);
+    let n = values.len();
+    if n % 2 == 1 { values[n / 2] } else { 0.5 * (values[n / 2 - 1] + values[n / 2]) }
+}
+
+fn executable(
+    s: &str,
+    q: &Sol,
+    x: Xk,
+    y: &DMatrix<f64>,
+    cov: Option<&DMatrix<f64>>,
+    meta: &mut Map<String, Value>,
+) -> Result<Option<Vec<f64>>, String> {
     let w = if let (Some(raw), Some(z)) = (&q.w, &q.z) {
         // A numerical repair is a new allocation. The solver certificate stays on raw.
-        let means = est::mom(&y).0;
+        let means = est::mom(y).0;
         let rho = meta.get("rho").and_then(Value::as_f64);
         let w = allocation(raw, z, x, &means, rho)?;
         let f = match s {
-            "f1" => mv::obj(&w, &means, &cov.as_ref().unwrap().0, LAM),
-            "f2" => mad::dev(&y, &w),
-            "f3" => cv::cvar(&cv::losses(&y, &w), 0.95),
-            "f5" => sk::obj(&w, &y, GAM, KAP, &means, &cov.as_ref().unwrap().0),
+            "f1" => mv::obj(&w, &means, cov.unwrap(), LAM),
+            "f2" => mad::dev(y, &w),
+            "f3" => cv::cvar(&cv::losses(y, &w), 0.95),
+            "f5" => sk::obj(&w, y, GAM, KAP, &means, cov.unwrap()),
             _ => unreachable!(),
         };
         if crate::crt::crossed(q.c.sn, f, q.c.bd, crate::crt::TOL) {
@@ -150,7 +175,7 @@ pub fn select(s: &str, pt: &History, u: &[usize], c: &Run, g: &mut StdRng) -> Re
     } else {
         None
     };
-    Ok(Choice { cols: u.to_vec(), w, c: Some(q.c), meta })
+    Ok(w)
 }
 
 /// Executable weights must still satisfy X(K) and the formulation's return floor.
